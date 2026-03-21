@@ -40,7 +40,7 @@ class TemporalDepthDialog(QDialog):
         super().__init__(parent)
         self.device_controller = device_controller
         self.config_manager = config_manager
-        self.setWindowTitle("以时间换位深度 - 嵌套叠叠乐")
+        self.setWindowTitle("连续扫描重建")
         self.setMinimumWidth(500)
         self.setWindowFlags(self.windowFlags() | Qt.WindowMinimizeButtonHint)
         self._running = False
@@ -73,7 +73,7 @@ class TemporalDepthDialog(QDialog):
         grp1.setLayout(form1)
         root.addWidget(grp1)
 
-        grp2 = QGroupBox("第二轮：嵌套精扫（叠叠乐）")
+        grp2 = QGroupBox("第二轮：嵌套精扫")
         form2 = QFormLayout()
         form2.setLabelAlignment(Qt.AlignRight)
         self.chkNested = QCheckBox("启用嵌套精扫（粗扫结束后自动执行）")
@@ -314,7 +314,7 @@ class TemporalDepthDialog(QDialog):
 
     def _worker_fn(self, params):
         try:
-            self._sig_log.emit("═══ 开始 以时间换位深度（嵌套叠叠乐） ═══")
+            self._sig_log.emit("═══ 开始 连续扫描重建 ═══")
             self._sig_log.emit(
                 "粗扫: Z {:.2f}->{:.2f}mm  速度 {:.2f}mm/s  采帧 {:.0f}ms".format(
                     params["z0"], params["z1"], params["speed"], params["itv"] * 1000
@@ -354,7 +354,7 @@ class TemporalDepthDialog(QDialog):
                 if frames2 and len(frames2) >= 2 and self._running:
                     depth_f, sharp_f, gray_f = build_best_focus_maps(frames2, zlist2)
                     updated = merge_focus_maps(depth_map, sharp_map, gray_map, depth_f, sharp_f, gray_f)
-                    self._sig_log.emit("  叠叠乐融合: {:,} 个像素由精扫更新".format(updated))
+                    self._sig_log.emit("个像素由精扫更新".format(updated))
                 else:
                     self._sig_log.emit("  精扫帧不足或已停止，跳过融合")
             elif not params["nested"]:
@@ -418,7 +418,7 @@ class TemporalDepthDialog(QDialog):
             fp = get_mpl_font()
             title_kw = {"fontproperties": fp} if fp else {}
             fig = plt.figure(figsize=(16, 6))
-            fig.suptitle("以时间换位深度 - 嵌套叠叠乐 点云", fontsize=14, **title_kw)
+            fig.suptitle("连续扫描重建", fontsize=14, **title_kw)
 
             ax1 = fig.add_subplot(1, 3, 1)
             ppmm = self.config_manager.pixels_per_mm

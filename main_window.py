@@ -6,11 +6,11 @@ from datetime import datetime
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMainWindow, QMessageBox
 
-from MvErrorDefine_const import MV_E_PARAMETER, MV_OK
+from sdk.MvErrorDefine_const import MV_E_PARAMETER, MV_OK
 from algorithms import compute_sharpness_score, ensure_dir, phase_correlation_shift
 from config_manager import ConfigManager
 from device_controller import DeviceController, SERIAL_AVAILABLE, to_hex_str
-from dialogs import PointCloudReconDialog, TemporalDepthDialog
+from dialogs import PointCloudReconDialog, TemporalDepthDialog, OneClickDialog
 from overlays import ResizeFilter, ScaleBarOverlay
 from ui import Ui_MainWindow
 
@@ -34,6 +34,7 @@ class MainWindow(QMainWindow):
         self._cam_img_width = 0
         self._recon3d_dialog = None
         self._temporal_depth_dialog = None
+        self._one_click_dialog = None
         self._cleaned_up = False
 
         self.scale_overlay = ScaleBarOverlay(self.ui.widgetDisplay)
@@ -80,24 +81,31 @@ class MainWindow(QMainWindow):
     def _create_menu(self):
         menubar = self.menuBar()
         menu_recon = menubar.addMenu("三维重建(&3D)")
-        action_recon = menu_recon.addAction("① 停-拍-移 点云重建（DFF）...")
+        action_recon = menu_recon.addAction("① 点云重建...")
         action_recon.triggered.connect(self.open_recon3d_dialog)
-        action_temporal = menu_recon.addAction("② 以时间换位深度（嵌套叠叠乐）...")
+        action_temporal = menu_recon.addAction("② 连续扫描重建...")
         action_temporal.triggered.connect(self.open_temporal_depth_dialog)
         menu_recon.addSeparator()
         action_help = menu_recon.addAction("使用说明")
         action_help.triggered.connect(self.show_recon_help)
 
+        menu_imaging = menubar.addMenu("出图(&I)")
+        action_one_click = menu_imaging.addAction("一键出图...")
+        action_one_click.triggered.connect(self.open_one_click_dialog)
+
     def show_recon_help(self):
         QMessageBox.information(
             self,
             "三维重建使用说明",
-            "① 停-拍-移 点云重建（DFF）\n"
+            "① 点云重建\n"
             "原理：Z 轴逐步停顿，每步拍一帧，逐像素取锐度最大 Z 值。\n\n"
-            "② 以时间换位深度（嵌套叠叠乐）\n"
+            "② 连续扫描重建\n"
             "原理：Z 轴匀速连续扫描，相机按时间间隔采帧，按时间映射 Z 位置，"
             "可选嵌套精扫融合。\n\n"
-            "两种模式都支持可视化和导出 .ply / .csv。",
+            "两种模式都支持可视化和导出 .ply / .csv。\n\n"
+            "【出图菜单】一键出图\n"
+            "原理：Z 轴从高位（上）向低位（下）逐步停拍，\n"
+            "DFF 焦点融合生成一张全焦合成图，自动保存为 BMP，并在对话框内预览。",
         )
 
     def load_settings(self):
@@ -641,6 +649,13 @@ class MainWindow(QMainWindow):
         self._temporal_depth_dialog.show()
         self._temporal_depth_dialog.raise_()
         self._temporal_depth_dialog.activateWindow()
+
+    def open_one_click_dialog(self):
+        if self._one_click_dialog is None:
+            self._one_click_dialog = OneClickDialog(self.device_controller, self.config_manager, self)
+        self._one_click_dialog.show()
+        self._one_click_dialog.raise_()
+        self._one_click_dialog.activateWindow()
 
     def enable_controls(self):
         is_open = self.device_controller.opened

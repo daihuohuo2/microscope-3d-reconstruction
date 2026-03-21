@@ -10,10 +10,10 @@ except ImportError:
     serial = None
     SERIAL_AVAILABLE = False
 
-from CamOperation_class import CameraOperation
-from MvCameraControl_class import MvCamera
-from MvErrorDefine_const import MV_E_CALLORDER, MV_OK
-from CameraParams_header import (
+from sdk.CamOperation_class import CameraOperation
+from sdk.MvCameraControl_class import MvCamera
+from sdk.MvErrorDefine_const import MV_E_CALLORDER, MV_OK
+from sdk.CameraParams_header import (
     MV_CC_DEVICE_INFO,
     MV_CC_DEVICE_INFO_LIST,
     MV_GENTL_CAMERALINK_DEVICE,

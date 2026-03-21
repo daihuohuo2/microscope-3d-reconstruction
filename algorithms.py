@@ -208,3 +208,56 @@ def timestamped_pointcloud_name(prefix, extension):
 
 def ensure_dir(path):
     os.makedirs(path, exist_ok=True)
+
+
+def save_composite_image(intensity_map, file_path):
+    """将 float32 灰度强度图保存为图像文件（BMP / PNG）。
+    优先用 PyQt5 QImage.save()，失败则退化为纯 Python BMP 写入。
+    返回实际保存路径。
+    """
+    import numpy as np
+
+    arr = np.clip(intensity_map, 0, 255).astype(np.uint8)
+    try:
+        from PyQt5.QtGui import QImage
+        arr_c = np.ascontiguousarray(arr)
+        h, w = arr_c.shape
+        qimg = QImage(arr_c.data, w, h, w, QImage.Format_Grayscale8)
+        if qimg.save(file_path):
+            return file_path
+    except Exception:
+        pass
+    # 退化：写原始 8‑bpp BMP
+    _write_bmp_grayscale(arr, file_path)
+    return file_path
+
+
+def _write_bmp_grayscale(arr, file_path):
+    """将 uint8 二维 numpy 数组写为 8 位灰度 BMP（无需第三方库）。"""
+    import struct
+
+    h, w = arr.shape
+    row_padded = (w + 3) & ~3          # 每行 4 字节对齐
+    palette_bytes = 256 * 4            # 256 色调色板
+    pixel_offset = 54 + palette_bytes
+    file_size = pixel_offset + row_padded * h
+
+    with open(file_path, "wb") as f:
+        # BITMAPFILEHEADER (14 bytes)
+        f.write(b"BM")
+        f.write(struct.pack("<I", file_size))
+        f.write(struct.pack("<HH", 0, 0))
+        f.write(struct.pack("<I", pixel_offset))
+        # BITMAPINFOHEADER (40 bytes)，负高度 = 从上到下存储
+        f.write(struct.pack("<IiiHHIIiiII",
+                            40, w, -h, 1, 8, 0,
+                            row_padded * h, 2835, 2835, 256, 0))
+        # 灰度调色板
+        for i in range(256):
+            f.write(bytes([i, i, i, 0]))
+        # 像素数据
+        padding = bytes(row_padded - w)
+        for row in arr:
+            f.write(bytes(row.tobytes()))
+            if padding:
+                f.write(padding)
