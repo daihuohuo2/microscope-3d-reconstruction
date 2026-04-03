@@ -9,8 +9,8 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 _COMPACT_MARGINS  = (8, 14, 8, 8)
 _COMPACT_SPACING  = 4
-_COL_MAX_W        = 255
-_COL_MIN_W        = 220
+_COL_MAX_W        = 280
+_COL_MIN_W        = 240
 
 
 class Ui_MainWindow(object):
@@ -123,49 +123,31 @@ class Ui_MainWindow(object):
         g.setContentsMargins(*_COMPACT_MARGINS)
         g.setSpacing(_COMPACT_SPACING)
 
-        self.radioContinueMode = QtWidgets.QRadioButton()
-        self.radioContinueMode.setObjectName("radioContinueMode")
-        g.addWidget(self.radioContinueMode, 0, 0)
-
-        self.radioTriggerMode = QtWidgets.QRadioButton()
-        self.radioTriggerMode.setObjectName("radioTriggerMode")
-        g.addWidget(self.radioTriggerMode, 0, 1)
-
         self.bnStart = QtWidgets.QPushButton()
         self.bnStart.setEnabled(False)
         self.bnStart.setObjectName("bnStart")
-        g.addWidget(self.bnStart, 1, 0)
+        g.addWidget(self.bnStart, 0, 0)
 
         self.bnStop = QtWidgets.QPushButton()
         self.bnStop.setEnabled(False)
         self.bnStop.setObjectName("bnStop")
-        g.addWidget(self.bnStop, 1, 1)
-
-        self.bnSoftwareTrigger = QtWidgets.QPushButton()
-        self.bnSoftwareTrigger.setEnabled(False)
-        self.bnSoftwareTrigger.setObjectName("bnSoftwareTrigger")
-        g.addWidget(self.bnSoftwareTrigger, 2, 0, 1, 2)
-
-        self.bnSaveImage = QtWidgets.QPushButton()
-        self.bnSaveImage.setEnabled(False)
-        self.bnSaveImage.setObjectName("bnSaveImage")
-        g.addWidget(self.bnSaveImage, 3, 0, 1, 2)
+        g.addWidget(self.bnStop, 0, 1)
 
         self.bnAutoFocus = QtWidgets.QPushButton()
         self.bnAutoFocus.setEnabled(False)
         self.bnAutoFocus.setObjectName("bnAutoFocus")
-        g.addWidget(self.bnAutoFocus, 4, 0)
+        g.addWidget(self.bnAutoFocus, 1, 0)
 
         self.bnStopAutoFocus = QtWidgets.QPushButton()
         self.bnStopAutoFocus.setEnabled(False)
         self.bnStopAutoFocus.setObjectName("bnStopAutoFocus")
-        g.addWidget(self.bnStopAutoFocus, 4, 1)
+        g.addWidget(self.bnStopAutoFocus, 1, 1)
 
         self.lblAutoFocusStatus = QtWidgets.QLabel()
         self.lblAutoFocusStatus.setObjectName("lblAutoFocusStatus")
         self.lblAutoFocusStatus.setAlignment(QtCore.Qt.AlignCenter)
         self.lblAutoFocusStatus.setStyleSheet("font-size: 11px; color: #555;")
-        g.addWidget(self.lblAutoFocusStatus, 5, 0, 1, 2)
+        g.addWidget(self.lblAutoFocusStatus, 2, 0, 1, 2)
 
         g.setColumnStretch(0, 1); g.setColumnStretch(1, 1)
         self.groupGrab = grp
@@ -270,13 +252,36 @@ class Ui_MainWindow(object):
         self.bnHomeZ = QtWidgets.QPushButton(); self.bnHomeZ.setObjectName("bnHomeZ")
         g.addWidget(self.bnHomeZ, 0, 0, 1, 3)
 
+        self.bnCoarseUp = QtWidgets.QPushButton(); self.bnCoarseUp.setObjectName("bnCoarseUp")
+        self.bnCoarseDown = QtWidgets.QPushButton(); self.bnCoarseDown.setObjectName("bnCoarseDown")
+        g.addWidget(self.bnCoarseUp, 1, 0, 1, 2)
+        g.addWidget(self.bnCoarseDown, 1, 2, 1, 1)
+
+        self.bnMediumUp = QtWidgets.QPushButton(); self.bnMediumUp.setObjectName("bnMediumUp")
+        self.bnMediumDown = QtWidgets.QPushButton(); self.bnMediumDown.setObjectName("bnMediumDown")
+        g.addWidget(self.bnMediumUp, 2, 0, 1, 2)
+        g.addWidget(self.bnMediumDown, 2, 2, 1, 1)
+
+        self.bnFineUp = QtWidgets.QPushButton(); self.bnFineUp.setObjectName("bnFineUp")
+        self.bnFineDown = QtWidgets.QPushButton(); self.bnFineDown.setObjectName("bnFineDown")
+        g.addWidget(self.bnFineUp, 3, 0, 1, 2)
+        g.addWidget(self.bnFineDown, 3, 2, 1, 1)
+
         self.bnMoveStep = QtWidgets.QPushButton(); self.bnMoveStep.setObjectName("bnMoveStep")
-        g.addWidget(self.bnMoveStep, 1, 0, 1, 3)
+        self.bnMoveStepDown = QtWidgets.QPushButton(); self.bnMoveStepDown.setObjectName("bnMoveStepDown")
+        g.addWidget(self.bnMoveStep, 4, 0, 1, 2)
+        g.addWidget(self.bnMoveStepDown, 4, 2, 1, 1)
 
         self.label_light = QtWidgets.QLabel(); self.label_light.setObjectName("label_light")
-        self.edtLightValue = QtWidgets.QLineEdit(); self.edtLightValue.setObjectName("edtLightValue")
-        self.bnSetLight = QtWidgets.QPushButton(); self.bnSetLight.setObjectName("bnSetLight")
-        g.addWidget(self.label_light, 2, 0); g.addWidget(self.edtLightValue, 2, 1); g.addWidget(self.bnSetLight, 2, 2)
+        self.sliderLight = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.sliderLight.setObjectName("sliderLight")
+        self.sliderLight.setRange(0, 255)
+        self.sliderLight.setValue(255)
+        self.lblLightValue = QtWidgets.QLabel("255")
+        self.lblLightValue.setObjectName("lblLightValue")
+        self.lblLightValue.setMinimumWidth(28)
+        self.lblLightValue.setAlignment(QtCore.Qt.AlignCenter)
+        g.addWidget(self.label_light, 5, 0); g.addWidget(self.sliderLight, 5, 1); g.addWidget(self.lblLightValue, 5, 2)
 
         g.setColumnStretch(0, 2); g.setColumnStretch(1, 3); g.setColumnStretch(2, 2)
         self.groupMotion = grp
@@ -376,12 +381,8 @@ class Ui_MainWindow(object):
         self.bnOpen.setText(                _("MainWindow", "打开设备"))
         self.bnClose.setText(               _("MainWindow", "关闭设备"))
         self.groupGrab.setTitle(            _("MainWindow", "采集"))
-        self.radioContinueMode.setText(     _("MainWindow", "连续模式"))
-        self.radioTriggerMode.setText(      _("MainWindow", "触发模式"))
         self.bnStart.setText(               _("MainWindow", "开始采集"))
         self.bnStop.setText(                _("MainWindow", "停止采集"))
-        self.bnSoftwareTrigger.setText(     _("MainWindow", "软触发一次"))
-        self.bnSaveImage.setText(           _("MainWindow", "保存图像"))
         self.bnAutoFocus.setText(           _("MainWindow", "开始自动对焦"))
         self.bnStopAutoFocus.setText(       _("MainWindow", "停止对焦"))
         self.lblAutoFocusStatus.setText(    _("MainWindow", "就绪"))
@@ -410,10 +411,15 @@ class Ui_MainWindow(object):
         self.lblSerialStatus.setText(       _("MainWindow", " 未连接"))
         self.groupMotion.setTitle(          _("MainWindow", "运动控制"))
         self.bnHomeZ.setText(               _("MainWindow", "Z 轴归零"))
-        self.bnMoveStep.setText(            _("MainWindow", "Z 轴微调 (+0.1mm)"))
+        self.bnCoarseUp.setText(            _("MainWindow", "Z 粗调（+1.00mm）"))
+        self.bnCoarseDown.setText(          _("MainWindow", "粗调（-1.00mm）"))
+        self.bnMediumUp.setText(            _("MainWindow", "Z 中调（+0.10mm）"))
+        self.bnMediumDown.setText(          _("MainWindow", "中调（-0.10mm）"))
+        self.bnFineUp.setText(              _("MainWindow", "Z 细调（+0.05mm）"))
+        self.bnFineDown.setText(            _("MainWindow", "细调（-0.05mm）"))
+        self.bnMoveStep.setText(            _("MainWindow", "Z 极细调（+0.005mm）"))
+        self.bnMoveStepDown.setText(        _("MainWindow", "极细调（-0.005mm）"))
         self.label_light.setText(           _("MainWindow", "亮度"))
-        self.edtLightValue.setText(         _("MainWindow", "0"))
-        self.bnSetLight.setText(            _("MainWindow", "设置亮度"))
         self.groupScaleBar.setTitle(        _("MainWindow", "比例尺"))
         self.chkShowScaleBar.setText(       _("MainWindow", "显示比例尺"))
         self.label_ppmm.setText(            _("MainWindow", "像素/mm"))

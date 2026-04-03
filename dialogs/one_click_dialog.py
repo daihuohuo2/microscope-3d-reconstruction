@@ -386,11 +386,8 @@ class OneClickDialog(QDialog):
             # ── 步骤 1：移动到高位起点 ──
             emit_status("步骤 1/4：移动到高位起点 Z={:.3f}mm...".format(z_high))
             try:
-                self.device_controller.send_gcode("G90\n")
-                self.device_controller.send_gcode(
-                    "G1 Z{:.4f} F300\n".format(z_high)
-                )
-                emit_log("  G90 + G1 Z{:.4f} F300 已发送".format(z_high))
+                self.device_controller.move_z_absolute(z_high, feed=300)
+                emit_log("  move_z_absolute({:.4f}, F300) 已发送".format(z_high))
             except Exception as exc:
                 emit_status("串口发送失败: " + str(exc), "red")
                 self._sig_done.emit(False, None)

@@ -60,6 +60,8 @@ class DeviceController:
         self.serial_conn = None
         self.serial_connected = False
         self._sdk_initialized = False
+        self._z_soft_limit = 68.0
+        self._z_position = 0.0
 
     def initialize_sdk(self):
         if not self._sdk_initialized:
@@ -207,6 +209,21 @@ class DeviceController:
             raise RuntimeError("Set param failed ret:{}".format(to_hex_str(ret)))
         return ret
 
+    def set_exposure(self, exposure_us):
+        """Set exposure time in microseconds directly."""
+        self._ensure_camera()
+        self.obj_cam_operation.obj_cam.MV_CC_SetEnumValue("ExposureAuto", 0)
+        ret = self.obj_cam_operation.obj_cam.MV_CC_SetFloatValue("ExposureTime", float(exposure_us))
+        if ret != 0:
+            raise RuntimeError("Set exposure failed ret:{}".format(to_hex_str(ret)))
+
+    def set_gain(self, gain_db):
+        """Set gain in dB directly."""
+        self._ensure_camera()
+        ret = self.obj_cam_operation.obj_cam.MV_CC_SetFloatValue("Gain", float(gain_db))
+        if ret != 0:
+            raise RuntimeError("Set gain failed ret:{}".format(to_hex_str(ret)))
+
     def get_frame_numpy(self):
         self._ensure_camera()
         return self.obj_cam_operation.Get_frame_numpy()
@@ -237,6 +254,7 @@ class DeviceController:
             timeout=float(timeout),
         )
         self.serial_connected = True
+        self.send_gcode("G91\n")
 
     def disconnect_serial(self):
         if self.serial_conn is not None:
@@ -253,6 +271,28 @@ class DeviceController:
         self.serial_conn.write(cmd.encode("utf-8"))
         return True
 
+    def flush_serial_input(self):
+        """Clear any pending data in serial input buffer."""
+        if self.serial_conn and self.serial_conn.in_waiting:
+            self.serial_conn.read(self.serial_conn.in_waiting)
+
+    def send_gcode_wait(self, cmd, timeout=10.0):
+        """Send G-code and wait for 'ok' response from firmware."""
+        if not self.serial_connected or self.serial_conn is None:
+            raise RuntimeError("串口未连接，请先连接串口！")
+        self.flush_serial_input()
+        self.serial_conn.write(cmd.encode("utf-8"))
+        import time as _time
+        deadline = _time.time() + timeout
+        while _time.time() < deadline:
+            if self.serial_conn.in_waiting:
+                line = self.serial_conn.readline().decode("utf-8", errors="ignore").strip().lower()
+                if line.startswith("ok"):
+                    return True
+            else:
+                _time.sleep(0.01)
+        return False
+
     def try_send_gcode(self, cmd):
         try:
             self.send_gcode(cmd)
@@ -262,15 +302,36 @@ class DeviceController:
 
     def home_z(self):
         self.send_gcode("G28 Z\n")
+        self._z_position = 0.0
+        self.send_gcode("G91\n")
+
+    def _check_z_soft_limit(self, target_z):
+        if target_z >= self._z_soft_limit:
+            self.send_gcode("M211 S1\n")
+            print("[安全] Z={:.2f}mm >= {:.0f}mm，已启用软限位 (M211 S1)".format(
+                target_z, self._z_soft_limit))
+            raise RuntimeError(
+                "Z 轴已达 {:.0f}mm 安全限位，已自动启用软限位防止撞击样品。".format(
+                    self._z_soft_limit))
 
     def move_z_relative(self, step_mm, feed=300):
-        self.send_gcode("G91\n")
-        self.send_gcode("G1 Z{:.4f} F{}\n".format(step_mm, feed))
-        self.send_gcode("G90\n")
+        self._check_z_soft_limit(self._z_position + step_mm)
+        self.send_gcode("G91\nG1 Z{:.4f} F{}\n".format(step_mm, feed))
+        self._z_position += step_mm
+
+    def move_z_relative_wait(self, step_mm, feed=2000):
+        """Move Z relative and wait for physical completion using M400."""
+        self._check_z_soft_limit(self._z_position + step_mm)
+        self.send_gcode("G91\nG1 Z{:.4f} F{}\n".format(step_mm, feed))
+        self._z_position += step_mm
+        self.send_gcode_wait("M400\n", timeout=10.0)
 
     def move_z_absolute(self, position_mm, feed=300):
+        self._check_z_soft_limit(position_mm)
         self.send_gcode("G90\n")
         self.send_gcode("G1 Z{:.4f} F{}\n".format(position_mm, feed))
+        self.send_gcode("G91\n")
+        self._z_position = position_mm
 
     def set_light(self, value):
         self.send_gcode("M106 S{}\n".format(int(value)))

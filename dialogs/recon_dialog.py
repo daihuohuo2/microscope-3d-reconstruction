@@ -178,8 +178,7 @@ class PointCloudReconDialog(QDialog):
             z_positions = [z_start + index * z_step for index in range(n_steps)]
 
             set_status("移动到起始位置 Z={:.3f} mm...".format(z_start))
-            self.device_controller.send_gcode("G90\n")
-            self.device_controller.send_gcode("G1 Z{:.4f} F300\n".format(z_start))
+            self.device_controller.move_z_absolute(z_start, feed=300)
             time.sleep(max(0.8, abs(z_start) / 5.0 + 0.4))
 
             gray0, width, height = self.device_controller.get_gray_frame()

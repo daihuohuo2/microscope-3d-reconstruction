@@ -255,8 +255,7 @@ class TemporalDepthDialog(QDialog):
     def _do_sweep(self, z0, z1, speed, itv, label="粗扫"):
         sweep_s = abs(z1 - z0) / speed
         self._sig_status.emit("{} - 移动到起始 Z={:.3f}mm...".format(label, z0), "blue")
-        self._gcode("G90\n")
-        self._gcode("G1 Z{:.4f} F300\n".format(z0))
+        self.device_controller.move_z_absolute(z0, feed=300)
 
         wait = max(0.8, abs(z0) / 5.0 + 0.5)
         start_wait = time.time()
@@ -272,7 +271,8 @@ class TemporalDepthDialog(QDialog):
         self._sig_log.emit("  图像尺寸 {}x{}".format(width, height))
 
         self._sig_status.emit("{} - Z 轴开始匀速扫描，速度 {:.2f} mm/s...".format(label, speed), "blue")
-        self._gcode("G1 Z{:.4f} F{:.1f}\n".format(z1, speed * 60.0))
+        sweep_dist = z1 - z0
+        self._gcode("G1 Z{:.4f} F{:.1f}\n".format(sweep_dist, speed * 60.0))
 
         t_start = time.time()
         next_cap = t_start
@@ -301,7 +301,7 @@ class TemporalDepthDialog(QDialog):
                 break
             time.sleep(max(0.0, next_cap - time.time()))
 
-        self._gcode("G1 Z{:.4f} F300\n".format(z_est if z_list else z1))
+        self.device_controller._z_position = z_est if z_list else z1
         self._sig_log.emit(
             "  {} 结束：采集 {} 帧，Z 估算范围 {:.3f}~{:.3f} mm".format(
                 label,
