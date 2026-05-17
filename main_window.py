@@ -154,12 +154,12 @@ class MainWindow(QMainWindow):
         try:
             devices = self.device_controller.enum_devices()
         except Exception as exc:
-            QMessageBox.warning(self, "Error", str(exc), QMessageBox.Ok)
+            QMessageBox.warning(self, "查找设备失败", str(exc), QMessageBox.Ok)
             return
 
         self.ui.ComboDevices.clear()
         if not devices:
-            QMessageBox.warning(self, "Info", "Find no device", QMessageBox.Ok)
+            QMessageBox.warning(self, "未找到设备", "未发现任何相机设备，请检查连接。", QMessageBox.Ok)
             return
         self.ui.ComboDevices.addItems(devices)
         self.ui.ComboDevices.setCurrentIndex(0)

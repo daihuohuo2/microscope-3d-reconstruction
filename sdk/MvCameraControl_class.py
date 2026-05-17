@@ -73,8 +73,14 @@ def check_sys_and_update_dll():
         MvCamCtrldll = ctypes.cdll.LoadLibrary(MvCamCtrldllPath)
         
         
+MvCamCtrldll = None  # set by check_sys_and_update_dll(); None means SDK not loaded
+_SDK_LOAD_ERROR = None  # stores the exception message if DLL loading failed
+
 #检测系统，并加载sdk库
-check_sys_and_update_dll()
+try:
+    check_sys_and_update_dll()
+except Exception as _sdk_exc:
+    _SDK_LOAD_ERROR = str(_sdk_exc)
 
 
         

@@ -963,13 +963,14 @@ def save_color_image(rgb_map, file_path):
 
 
 def save_focus_comparison_image(reference_map, full_focus_map, pixels_per_mm, file_path, reference_label="single best frame"):
-    """Save no-fusion vs DFF full-focus as one side-by-side PNG."""
+    """Save no-fusion vs DFF full-focus as one side-by-side PNG, both panels with scale bar."""
     import numpy as np
 
     if reference_map is None or full_focus_map is None:
         return None
-    left = _to_uint8_image(reference_map)
-    right = _to_uint8_image(full_focus_map)
+    # Apply scale bars to both panels before compositing
+    left = add_scale_bar_to_image(reference_map, pixels_per_mm)
+    right = add_scale_bar_to_image(full_focus_map, pixels_per_mm)
     h = min(left.shape[0], right.shape[0])
     w = min(left.shape[1], right.shape[1])
     left = left[:h, :w]
@@ -1014,13 +1015,16 @@ def save_focus_comparison_image(reference_map, full_focus_map, pixels_per_mm, fi
     return file_path
 
 
-def save_focus_comparison_color_image(reference_rgb, full_focus_rgb, file_path, reference_label="single best frame"):
+def save_focus_comparison_color_image(reference_rgb, full_focus_rgb, file_path, reference_label="single best frame", pixels_per_mm=0.0):
     import numpy as np
 
     if reference_rgb is None or full_focus_rgb is None:
         return None
-    left = np.clip(np.asarray(reference_rgb)[:, :, :3], 0, 255).astype(np.uint8)
-    right = np.clip(np.asarray(full_focus_rgb)[:, :, :3], 0, 255).astype(np.uint8)
+    # Apply scale bars to both panels
+    left = add_scale_bar_to_color_image(reference_rgb, pixels_per_mm)
+    right = add_scale_bar_to_color_image(full_focus_rgb, pixels_per_mm)
+    left = np.clip(np.asarray(left)[:, :, :3], 0, 255).astype(np.uint8)
+    right = np.clip(np.asarray(right)[:, :, :3], 0, 255).astype(np.uint8)
     h = min(left.shape[0], right.shape[0])
     w = min(left.shape[1], right.shape[1])
     left = left[:h, :w]
@@ -1084,49 +1088,87 @@ def _to_at_least_12bit_image(arr):
     return np.clip(source, 0.0, 65535.0).astype(np.uint16)
 
 
+def _draw_scale_bar_on_array(arr, pixels_per_mm):
+    """In-place: draw a labeled scale bar (bar + text) on a uint8 ndarray (HxW or HxWx3)."""
+    import numpy as np
+
+    is_gray = arr.ndim == 2
+    h, w = arr.shape[:2]
+    if h < 32 or w < 32 or pixels_per_mm <= 0:
+        return arr
+
+    nice_lengths_mm = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0]
+    target_px = w * 0.20
+    bar_len_mm = nice_lengths_mm[0]
+    for length in nice_lengths_mm:
+        px = int(round(length * pixels_per_mm))
+        if px > target_px:
+            break
+        bar_len_mm = length
+
+    bar_len_px = max(4, int(round(bar_len_mm * pixels_per_mm)))
+    # Label: use μm when < 1 mm, otherwise mm
+    if bar_len_mm < 1.0:
+        label = "{:g} \u03bcm".format(bar_len_mm * 1000)
+    else:
+        label = "{:g} mm".format(bar_len_mm)
+
+    try:
+        import cv2 as _cv2
+
+        # Convert gray → BGR for drawing, convert back after
+        if is_gray:
+            canvas = _cv2.cvtColor(arr, _cv2.COLOR_GRAY2BGR)
+        else:
+            canvas = arr[:, :, :3].copy()
+
+        font = _cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = max(0.55, min(1.6, w / 1400.0))
+        thickness = max(1, int(round(font_scale * 2)))
+        bar_h = max(6, h // 100)
+        margin = max(14, min(w, h) // 30)
+
+        (tw, th), baseline = _cv2.getTextSize(label, font, font_scale, thickness)
+        text_gap = max(4, bar_h // 2)
+        total_h = bar_h + text_gap + th + baseline
+
+        x0 = max(margin, w - margin - bar_len_px)
+        x1 = min(w - margin, x0 + bar_len_px)
+        y_bar = max(margin, h - margin - total_h)
+        y_text = y_bar + bar_h + text_gap + th
+
+        # Dark background box
+        bg_pad = max(4, bar_h // 2)
+        bx0 = max(0, x0 - bg_pad)
+        bx1 = min(w, x1 + bg_pad)
+        by0 = max(0, y_bar - bg_pad)
+        by1 = min(h, y_text + baseline + bg_pad)
+        canvas[by0:by1, bx0:bx1] = (canvas[by0:by1, bx0:bx1].astype(np.float32) * 0.30).astype(np.uint8)
+
+        # Scale bar line + end ticks
+        tick_h = max(bar_h + 2, bar_h * 2)
+        _cv2.rectangle(canvas, (x0, y_bar), (x1, y_bar + bar_h), (255, 255, 255), -1)
+        _cv2.rectangle(canvas, (x0, y_bar), (x0 + max(2, bar_h // 2), y_bar + tick_h), (255, 255, 255), -1)
+        _cv2.rectangle(canvas, (x1 - max(2, bar_h // 2), y_bar), (x1, y_bar + tick_h), (255, 255, 255), -1)
+
+        # Text centered under bar
+        tx = x0 + (bar_len_px - tw) // 2
+        _cv2.putText(canvas, label, (tx, y_text), font, font_scale, (255, 255, 255), thickness, _cv2.LINE_AA)
+
+        if is_gray:
+            return _cv2.cvtColor(canvas, _cv2.COLOR_BGR2GRAY)
+        return canvas
+    except Exception:
+        return arr
+
+
 def add_scale_bar_to_image(intensity_map, pixels_per_mm):
     import numpy as np
 
     arr = _to_uint8_image(intensity_map).copy()
     if pixels_per_mm <= 0 or arr.ndim != 2:
         return arr
-
-    h, w = arr.shape
-    if h < 32 or w < 32:
-        return arr
-
-    nice_lengths_mm = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0]
-    target_px = w * 0.20
-    bar_len_mm = nice_lengths_mm[0]
-    bar_len_px = max(1, int(round(bar_len_mm * pixels_per_mm)))
-    for length in nice_lengths_mm:
-        px = int(round(length * pixels_per_mm))
-        if px > target_px:
-            break
-        bar_len_mm = length
-        bar_len_px = max(1, px)
-
-    margin = max(8, min(w, h) // 40)
-    bar_h = max(4, h // 180)
-    tick_h = max(bar_h + 4, h // 90)
-    x0 = max(margin, w - margin - bar_len_px)
-    y0 = max(margin, h - margin - tick_h)
-    x1 = min(w - margin, x0 + bar_len_px)
-    if x1 <= x0:
-        return arr
-
-    bg_pad = max(2, bar_h // 2)
-    y_bg0 = max(0, y0 - bg_pad)
-    y_bg1 = min(h, y0 + tick_h + bg_pad)
-    x_bg0 = max(0, x0 - bg_pad)
-    x_bg1 = min(w, x1 + bg_pad)
-    region = arr[y_bg0:y_bg1, x_bg0:x_bg1].astype(np.uint16)
-    arr[y_bg0:y_bg1, x_bg0:x_bg1] = (region * 0.35).astype(np.uint8)
-
-    arr[y0:y0 + bar_h, x0:x1] = 255
-    arr[y0:y0 + tick_h, x0:min(x0 + max(2, bar_h // 2), w)] = 255
-    arr[y0:y0 + tick_h, max(x1 - max(2, bar_h // 2), 0):x1] = 255
-    return arr
+    return _draw_scale_bar_on_array(arr, pixels_per_mm)
 
 
 def add_scale_bar_to_color_image(rgb_map, pixels_per_mm):
@@ -1138,42 +1180,7 @@ def add_scale_bar_to_color_image(rgb_map, pixels_per_mm):
     arr = np.clip(rgb[:, :, :3], 0, 255).astype(np.uint8).copy()
     if pixels_per_mm <= 0:
         return arr
-
-    h, w = arr.shape[:2]
-    if h < 32 or w < 32:
-        return arr
-
-    nice_lengths_mm = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0]
-    target_px = w * 0.20
-    bar_len_mm = nice_lengths_mm[0]
-    bar_len_px = max(1, int(round(bar_len_mm * pixels_per_mm)))
-    for length in nice_lengths_mm:
-        px = int(round(length * pixels_per_mm))
-        if px > target_px:
-            break
-        bar_len_mm = length
-        bar_len_px = max(1, px)
-
-    margin = max(8, min(w, h) // 40)
-    bar_h = max(4, h // 180)
-    tick_h = max(bar_h + 4, h // 90)
-    x0 = max(margin, w - margin - bar_len_px)
-    y0 = max(margin, h - margin - tick_h)
-    x1 = min(w - margin, x0 + bar_len_px)
-    if x1 <= x0:
-        return arr
-
-    bg_pad = max(2, bar_h // 2)
-    y_bg0 = max(0, y0 - bg_pad)
-    y_bg1 = min(h, y0 + tick_h + bg_pad)
-    x_bg0 = max(0, x0 - bg_pad)
-    x_bg1 = min(w, x1 + bg_pad)
-    arr[y_bg0:y_bg1, x_bg0:x_bg1] = (arr[y_bg0:y_bg1, x_bg0:x_bg1].astype(np.float32) * 0.35).astype(np.uint8)
-
-    arr[y0:y0 + bar_h, x0:x1] = 255
-    arr[y0:y0 + tick_h, x0:min(x0 + max(2, bar_h // 2), w)] = 255
-    arr[y0:y0 + tick_h, max(x1 - max(2, bar_h // 2), 0):x1] = 255
-    return arr
+    return _draw_scale_bar_on_array(arr, pixels_per_mm)
 
 
 def save_depth_tiff16(depth_map, file_path, z_scale=1.0):
@@ -1336,7 +1343,7 @@ def save_output_bundle(
     if reference_map is not None:
         paths["focus_compare"] = os.path.join(save_dir, basename + "_focus_compare.png")
         if color_map is not None and reference_color_map is not None:
-            save_focus_comparison_color_image(reference_color_map, color_map, paths["focus_compare"], reference_label)
+            save_focus_comparison_color_image(reference_color_map, color_map, paths["focus_compare"], reference_label, pixels_per_mm)
         else:
             save_focus_comparison_image(reference_map, intensity_map, pixels_per_mm, paths["focus_compare"], reference_label)
 

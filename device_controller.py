@@ -12,19 +12,33 @@ except ImportError:
     serial = None
     SERIAL_AVAILABLE = False
 
-from sdk.CamOperation_class import CameraOperation
-from sdk.MvCameraControl_class import MvCamera
-from sdk.MvErrorDefine_const import MV_OK
-from sdk.CameraParams_header import (
-    MV_CC_DEVICE_INFO,
-    MV_CC_DEVICE_INFO_LIST,
-    MV_GENTL_CAMERALINK_DEVICE,
-    MV_GENTL_CXP_DEVICE,
-    MV_GENTL_GIGE_DEVICE,
-    MV_GENTL_XOF_DEVICE,
-    MV_GIGE_DEVICE,
-    MV_USB_DEVICE,
-)
+try:
+    from sdk.CamOperation_class import CameraOperation
+    from sdk.MvCameraControl_class import MvCamera, _SDK_LOAD_ERROR as _MV_SDK_ERR
+    from sdk.MvErrorDefine_const import MV_OK
+    from sdk.CameraParams_header import (
+        MV_CC_DEVICE_INFO,
+        MV_CC_DEVICE_INFO_LIST,
+        MV_GENTL_CAMERALINK_DEVICE,
+        MV_GENTL_CXP_DEVICE,
+        MV_GENTL_GIGE_DEVICE,
+        MV_GENTL_XOF_DEVICE,
+        MV_GIGE_DEVICE,
+        MV_USB_DEVICE,
+    )
+    MV_SDK_AVAILABLE = (_MV_SDK_ERR is None)
+    MV_SDK_ERROR_MSG = _MV_SDK_ERR or ""
+except Exception as _e:
+    MV_SDK_AVAILABLE = False
+    MV_SDK_ERROR_MSG = str(_e)
+    # Provide lightweight stubs so the rest of the module can still be imported
+    MvCamera = None
+    CameraOperation = None
+    MV_OK = 0
+    MV_CC_DEVICE_INFO = None
+    MV_CC_DEVICE_INFO_LIST = None
+    MV_GENTL_CAMERALINK_DEVICE = MV_GENTL_CXP_DEVICE = MV_GENTL_GIGE_DEVICE = 0
+    MV_GENTL_XOF_DEVICE = MV_GIGE_DEVICE = MV_USB_DEVICE = 0
 
 
 def to_hex_str(num):
@@ -54,8 +68,8 @@ def decode_ctypes_string(value):
 
 class DeviceController:
     def __init__(self):
-        self.cam = MvCamera()
-        self.device_list = MV_CC_DEVICE_INFO_LIST()
+        self.cam = MvCamera() if MV_SDK_AVAILABLE else None
+        self.device_list = MV_CC_DEVICE_INFO_LIST() if MV_SDK_AVAILABLE else None
         self.obj_cam_operation = None
         self.opened = False
         self.grabbing = False
@@ -69,11 +83,15 @@ class DeviceController:
         self._serial_lock = threading.RLock()
 
     def initialize_sdk(self):
+        if not MV_SDK_AVAILABLE:
+            return
         if not self._sdk_initialized:
             MvCamera.MV_CC_Initialize()
             self._sdk_initialized = True
 
     def finalize_sdk(self):
+        if not MV_SDK_AVAILABLE:
+            return
         if self._sdk_initialized:
             MvCamera.MV_CC_Finalize()
             self._sdk_initialized = False
@@ -84,6 +102,12 @@ class DeviceController:
         self.finalize_sdk()
 
     def enum_devices(self):
+        if not MV_SDK_AVAILABLE:
+            raise RuntimeError(
+                "相机 SDK 未安装，无法查找设备。\n"
+                "请安装海康威视 MVS SDK 后重新运行。\n\n"
+                + ("详细信息：" + MV_SDK_ERROR_MSG if MV_SDK_ERROR_MSG else "")
+            )
         self.device_list = MV_CC_DEVICE_INFO_LIST()
         layer_type = (
             MV_GIGE_DEVICE
