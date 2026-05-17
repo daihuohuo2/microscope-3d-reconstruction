@@ -381,8 +381,9 @@ class PointCloudReconDialog(QDialog):
             self._last_output_paths = output_paths
 
             set_progress(100)
+            out_dir = output_paths.get("output_dir", save_dir)
             message = "完成：{}x{}，点云 {:,} 点，覆盖率 {:.1f}%\n目录：{}".format(
-                width, height, len(point_cloud), coverage, save_dir
+                width, height, len(point_cloud), coverage, out_dir
             )
             set_status(message, "green")
             _success = True

@@ -690,15 +690,17 @@ class OneClickDialog(QDialog):
                 self._last_output_paths = output_paths
                 save_path = output_paths.get("full_focus", "")
                 self._last_save_path = save_path
-                emit_log("保存：{}".format(save_dir))
+                out_dir = output_paths.get("output_dir", save_dir)
+                emit_log("保存：{}".format(out_dir))
             except Exception as exc:
                 emit_log("  [警告] 自动保存失败：{}".format(exc))
                 save_path = "（保存失败）"
+                out_dir = save_dir
 
             emit_progress(100)
 
             # 构建状态消息
-            status_msg = "完成：{}×{}，目录：{}".format(width, height, save_dir)
+            status_msg = "完成：{}×{}，目录：{}".format(width, height, out_dir)
             if gen_pointcloud:
                 status_msg += "\n点云：{:,} 点".format(point_count)
 

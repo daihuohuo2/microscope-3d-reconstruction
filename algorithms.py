@@ -1328,35 +1328,39 @@ def save_output_bundle(
     z_positions=None,
     frames_color=None,
 ):
-    ensure_dir(save_dir)
-    basename = build_output_basename(prefix, params)
+    # 每次拍摄创建独立子文件夹，文件夹名 = 拍摄时间_类型
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    folder_name = "{}_{}".format(timestamp, prefix)
+    out_dir = os.path.join(save_dir, folder_name)
+    ensure_dir(out_dir)
+
     full_focus_bit_depth = 8 if color_map is not None else max(12, _estimate_gray_bit_depth(intensity_map))
     paths = {}
-    paths["full_focus"] = os.path.join(save_dir, basename + "_full_focus.png")
+    paths["full_focus"] = os.path.join(out_dir, "full_focus.png")
     if color_map is not None:
         save_color_image(add_scale_bar_to_color_image(color_map, pixels_per_mm), paths["full_focus"])
     else:
         save_composite_image(add_scale_bar_to_image(intensity_map, pixels_per_mm), paths["full_focus"])
-        paths["full_focus_tiff"] = os.path.join(save_dir, basename + "_full_focus.tif")
+        paths["full_focus_tiff"] = os.path.join(out_dir, "full_focus.tif")
         save_composite_image(intensity_map, paths["full_focus_tiff"])
 
     if reference_map is not None:
-        paths["focus_compare"] = os.path.join(save_dir, basename + "_focus_compare.png")
+        paths["focus_compare"] = os.path.join(out_dir, "focus_compare.png")
         if color_map is not None and reference_color_map is not None:
             save_focus_comparison_color_image(reference_color_map, color_map, paths["focus_compare"], reference_label, pixels_per_mm)
         else:
             save_focus_comparison_image(reference_map, intensity_map, pixels_per_mm, paths["focus_compare"], reference_label)
 
-    paths["depth"] = os.path.join(save_dir, basename + "_depth_um16.tif")
+    paths["depth"] = os.path.join(out_dir, "depth_um16.tif")
     save_depth_tiff16(depth_map, paths["depth"], z_scale=z_scale)
 
     if point_cloud is not None and len(point_cloud) > 0:
-        paths["point_cloud_ply"] = os.path.join(save_dir, basename + "_point_cloud.ply")
+        paths["point_cloud_ply"] = os.path.join(out_dir, "point_cloud.ply")
         export_point_cloud(paths["point_cloud_ply"], point_cloud, pixels_per_mm, comment)
     # ── 逐帧原始图 ──
     if frames_gray is not None and z_positions is not None and len(frames_gray) > 0:
         import numpy as _np
-        frames_dir = os.path.join(save_dir, basename + "_frames")
+        frames_dir = os.path.join(out_dir, "frames")
         ensure_dir(frames_dir)
         for _i, (_gray, _z) in enumerate(zip(frames_gray, z_positions)):
             _fname = "frame_{:03d}_z{:+.3f}mm".format(_i + 1, float(_z))
@@ -1372,10 +1376,10 @@ def save_output_bundle(
                     os.path.join(frames_dir, _fname + ".tif"))
         paths["frames_dir"] = frames_dir
 
-    paths["manifest"] = os.path.join(save_dir, basename + "_manifest.json")
+    paths["manifest"] = os.path.join(out_dir, "manifest.json")
     manifest = {
         "created_at": datetime.now().isoformat(timespec="seconds"),
-        "basename": basename,
+        "folder": folder_name,
         "generator": comment,
         "parameters": _json_safe(params or {}),
         "units": {
@@ -1389,13 +1393,15 @@ def save_output_bundle(
         "notes": [
             "full_focus PNG is color when RGB camera data is available; grayscale fallback is only used when no color frames are captured",
             "full_focus TIFF is only written for grayscale fallback and is saved in a 16-bit container",
-            "focus_compare PNG shows the best single raw frame beside the DFF full-focus result when available",
+            "focus_compare PNG shows the worst single raw frame beside the DFF full-focus result when available",
             "depth TIFF is 16-bit grayscale; pixel values are relative height in micrometers",
             "PLY (binary) vertices include RGB values derived from the full-focus intensity texture",
         ],
     }
     with open(paths["manifest"], "w", encoding="utf-8") as file:
         json.dump(manifest, file, ensure_ascii=False, indent=2)
+    # 返回实际保存目录，方便调用方展示
+    paths["output_dir"] = out_dir
     return paths
 
 

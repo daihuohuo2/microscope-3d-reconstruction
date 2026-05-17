@@ -498,11 +498,12 @@ class TemporalDepthDialog(QDialog):
             self._last_output_paths = output_paths
 
             self._sig_progress.emit(100)
+            out_dir = output_paths.get("output_dir", save_dir)
             summary = "完成：{}x{}，点云 {:,} 点，覆盖率 {:.1f}%\n目录：{}".format(
-                width, height, len(point_cloud), coverage, save_dir
+                width, height, len(point_cloud), coverage, out_dir
             )
             self._sig_status.emit(summary, "green")
-            self._sig_log.emit("保存：{}".format(save_dir))
+            self._sig_log.emit("保存：{}".format(out_dir))
             self._sig_done.emit(True, summary)
         except Exception as exc:
             self._sig_status.emit("发生异常: " + str(exc), "red")
