@@ -40,33 +40,58 @@ def check_sys_and_update_dll():
     currentsystem = platform.system()
     
     if currentsystem == 'Windows':
-        #print(" current is windows system .")
-        MvCamCtrldllPath = "MvCameraControl.dll"
-        if "winmode" in ctypes.WinDLL.__init__.__code__.co_varnames:
-            MvCamCtrldll = WinDLL(MvCamCtrldllPath, winmode=0)
-        else:
-            MvCamCtrldll = WinDLL(MvCamCtrldllPath)
+        # 先尝试通过系统 PATH 加载；若失败则搜索 MVS 的标准安装目录
+        _dll_name = "MvCameraControl.dll"
+        _fallback_dirs = [
+            r"C:\Program Files (x86)\Common Files\MVS\Runtime\Win64_x64",
+            r"C:\Program Files\Common Files\MVS\Runtime\Win64_x64",
+            r"C:\Program Files (x86)\Common Files\MVS\Runtime\Win32_i86",
+            r"C:\Program Files\MVS\Runtime\Win64_x64",
+            r"C:\Program Files (x86)\MVS\Runtime\Win64_x64",
+        ]
+        def _load_win_dll(path):
+            if "winmode" in ctypes.WinDLL.__init__.__code__.co_varnames:
+                return WinDLL(path, winmode=0)
+            return WinDLL(path)
+
+        try:
+            MvCamCtrldll = _load_win_dll(_dll_name)
+        except OSError:
+            loaded = False
+            for _dir in _fallback_dirs:
+                _full = os.path.join(_dir, _dll_name)
+                if os.path.isfile(_full):
+                    MvCamCtrldll = _load_win_dll(_full)
+                    loaded = True
+                    break
+            if not loaded:
+                raise OSError(
+                    "找不到 MvCameraControl.dll。\n"
+                    "请安装海康威视 MVS SDK，或将 DLL 目录手动添加到系统 PATH。\n"
+                    "已搜索路径：\n" + "\n".join(_fallback_dirs)
+                )
     else:
         architecture = platform.machine()
+        _mvcam_env = os.getenv('MVCAM_COMMON_RUNENV') or ''
         if architecture == 'aarch64':
-            MvCamCtrldllPath = os.getenv('MVCAM_COMMON_RUNENV') + "/aarch64/libMvCameraControl.so"
+            MvCamCtrldllPath = _mvcam_env + "/aarch64/libMvCameraControl.so"
         elif architecture == 'x86_64':
             if bit_info == "32":
-                MvCamCtrldllPath = os.getenv('MVCAM_COMMON_RUNENV') + "/32/libMvCameraControl.so"
+                MvCamCtrldllPath = _mvcam_env + "/32/libMvCameraControl.so"
             else: 
-                MvCamCtrldllPath = os.getenv('MVCAM_COMMON_RUNENV') + "/64/libMvCameraControl.so"
+                MvCamCtrldllPath = _mvcam_env + "/64/libMvCameraControl.so"
         elif architecture == 'arm-none':
-            MvCamCtrldllPath = os.getenv('MVCAM_COMMON_RUNENV') + "/arm-none/libMvCameraControl.so"
+            MvCamCtrldllPath = _mvcam_env + "/arm-none/libMvCameraControl.so"
         elif architecture == 'armhf':
-            MvCamCtrldllPath = os.getenv('MVCAM_COMMON_RUNENV') + "/armhf/libMvCameraControl.so"
+            MvCamCtrldllPath = _mvcam_env + "/armhf/libMvCameraControl.so"
         elif architecture == 'armv6l':
-            MvCamCtrldllPath = os.getenv('MVCAM_COMMON_RUNENV') + "/armhf/libMvCameraControl.so"
+            MvCamCtrldllPath = _mvcam_env + "/armhf/libMvCameraControl.so"
         elif architecture == 'armv7l':
-            MvCamCtrldllPath = os.getenv('MVCAM_COMMON_RUNENV') + "/armhf/libMvCameraControl.so"
+            MvCamCtrldllPath = _mvcam_env + "/armhf/libMvCameraControl.so"
         elif architecture == 'i386':
-            MvCamCtrldllPath = os.getenv('MVCAM_COMMON_RUNENV') + "/32/libMvCameraControl.so"
+            MvCamCtrldllPath = _mvcam_env + "/32/libMvCameraControl.so"
         elif architecture == 'i686':
-            MvCamCtrldllPath = os.getenv('MVCAM_COMMON_RUNENV') + "/32/libMvCameraControl.so"
+            MvCamCtrldllPath = _mvcam_env + "/32/libMvCameraControl.so"
         else:
             print ("machine: %s, not support." % architecture) 
         
