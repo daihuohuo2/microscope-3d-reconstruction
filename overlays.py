@@ -106,3 +106,16 @@ class ResizeFilter(QObject):
         if event.type() in (QEvent.Resize, QEvent.Move):
             self._overlay.update_size()
         return False
+
+
+class DoubleClickFilter(QObject):
+    """Event filter that calls a callback(wx, wy) on mouse double-click."""
+
+    def __init__(self, callback):
+        super().__init__()
+        self._callback = callback
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.MouseButtonDblClick:
+            self._callback(event.x(), event.y())
+        return False

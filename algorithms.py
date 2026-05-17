@@ -470,6 +470,22 @@ def select_best_single_frame(frames_gray, z_list=None):
     return best_frame, best_z, float(best_score or 0.0)
 
 
+def select_worst_single_frame(frames_gray, z_list=None):
+    """Pick the one raw frame with the lowest whole-image sharpness score (most blurred)."""
+    if not frames_gray:
+        return None, None, 0.0
+    worst_frame = None
+    worst_z = None
+    worst_score = None
+    for index, gray in enumerate(frames_gray):
+        score = compute_sharpness_score(gray)
+        if worst_score is None or score < worst_score:
+            worst_frame = gray
+            worst_z = z_list[index] if z_list is not None and index < len(z_list) else None
+            worst_score = score
+    return worst_frame, worst_z, float(worst_score or 0.0)
+
+
 def compute_dff_volume(frames_gray, z_positions):
     import numpy as np
 
@@ -1301,6 +1317,9 @@ def save_output_bundle(
     reference_label="single best frame",
     color_map=None,
     reference_color_map=None,
+    frames_gray=None,
+    z_positions=None,
+    frames_color=None,
 ):
     ensure_dir(save_dir)
     basename = build_output_basename(prefix, params)
@@ -1327,6 +1346,25 @@ def save_output_bundle(
     if point_cloud is not None and len(point_cloud) > 0:
         paths["point_cloud_ply"] = os.path.join(save_dir, basename + "_point_cloud.ply")
         export_point_cloud(paths["point_cloud_ply"], point_cloud, pixels_per_mm, comment)
+    # ── 逐帧原始图 ──
+    if frames_gray is not None and z_positions is not None and len(frames_gray) > 0:
+        import numpy as _np
+        frames_dir = os.path.join(save_dir, basename + "_frames")
+        ensure_dir(frames_dir)
+        for _i, (_gray, _z) in enumerate(zip(frames_gray, z_positions)):
+            _fname = "frame_{:03d}_z{:+.3f}mm".format(_i + 1, float(_z))
+            _color = (frames_color[_i]
+                      if (frames_color and _i < len(frames_color))
+                      else None)
+            if _color is not None:
+                save_color_image(_color,
+                                 os.path.join(frames_dir, _fname + ".tif"))
+            else:
+                save_composite_image(
+                    _np.asarray(_gray, dtype=_np.float32),
+                    os.path.join(frames_dir, _fname + ".tif"))
+        paths["frames_dir"] = frames_dir
+
     paths["manifest"] = os.path.join(save_dir, basename + "_manifest.json")
     manifest = {
         "created_at": datetime.now().isoformat(timespec="seconds"),

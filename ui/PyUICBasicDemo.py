@@ -275,13 +275,14 @@ class Ui_MainWindow(object):
         self.sliderLight.setObjectName("sliderLight")
         self.sliderLight.setRange(0, 255)
         self.sliderLight.setValue(255)
-        self.lblLightValue = QtWidgets.QLabel("255")
-        self.lblLightValue.setObjectName("lblLightValue")
-        self.lblLightValue.setMinimumWidth(28)
-        self.lblLightValue.setAlignment(QtCore.Qt.AlignCenter)
-        g.addWidget(self.label_light, 7, 0); g.addWidget(self.sliderLight, 7, 1); g.addWidget(self.lblLightValue, 7, 2)
+        self.edtLightValue = QtWidgets.QLineEdit("255")
+        self.edtLightValue.setObjectName("edtLightValue")
+        self.edtLightValue.setMaximumWidth(46)
+        self.edtLightValue.setAlignment(QtCore.Qt.AlignCenter)
+        self.edtLightValue.setValidator(QtGui.QIntValidator(0, 255))
+        g.addWidget(self.label_light, 7, 0); g.addWidget(self.sliderLight, 7, 1); g.addWidget(self.edtLightValue, 7, 2)
 
-        g.setColumnStretch(0, 2); g.setColumnStretch(1, 3); g.setColumnStretch(2, 2)
+        g.setColumnStretch(0, 1); g.setColumnStretch(1, 8); g.setColumnStretch(2, 2)
         grp.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Expanding)
         self.groupMotion = grp
         return grp

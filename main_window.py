@@ -16,7 +16,7 @@ from algorithms import (
 from config_manager import ConfigManager
 from device_controller import DeviceController, SERIAL_AVAILABLE, to_hex_str
 from dialogs import PointCloudReconDialog, TemporalDepthDialog, OneClickDialog, ProgrammableShootingDialog
-from overlays import ResizeFilter, ScaleBarOverlay
+from overlays import DoubleClickFilter, ResizeFilter, ScaleBarOverlay
 from ui import Ui_MainWindow
 
 
@@ -43,6 +43,8 @@ class MainWindow(QMainWindow):
         self.dark_frame_captured = False
         self._z_at_home = False
         self._cam_img_width = 0
+        self._cam_img_height = 0
+        self._af_roi_center = None   # (img_cx, img_cy) set by double-click; None = global focus
         self._recon3d_dialog = None
         self._temporal_depth_dialog = None
         self._one_click_dialog = None
@@ -60,6 +62,9 @@ class MainWindow(QMainWindow):
         self.ui.widgetDisplay.installEventFilter(self._resize_filter)
         self.ui.centralWidget.installEventFilter(self._resize_filter)
         self.installEventFilter(self._resize_filter)   # 主窗口移动时更新叠加层位置
+
+        self._dblclick_filter = DoubleClickFilter(self._on_display_dblclick)
+        self.ui.widgetDisplay.installEventFilter(self._dblclick_filter)
 
         self._bind_signals()
         self._create_menu()
@@ -95,6 +100,7 @@ class MainWindow(QMainWindow):
         self.ui.bnMoveStep.clicked.connect(self.action_move_z_step)
         self.ui.bnMoveStepDown.clicked.connect(self.action_move_z_step_down)
         self.ui.sliderLight.valueChanged.connect(self.action_slider_light)
+        self.ui.edtLightValue.editingFinished.connect(self.action_light_input)
         self.ui.bnQuickScale.clicked.connect(self.start_quick_scale)
         self._quick_scale_done.connect(self._on_quick_scale_done)
         self._quick_scale_fail.connect(self._on_quick_scale_fail)
@@ -406,19 +412,93 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Z 轴移动失败", str(exc), QMessageBox.Ok)
 
     def action_slider_light(self, value):
-        self.ui.lblLightValue.setText(str(value))
+        self.ui.edtLightValue.setText(str(value))
+        self.send_gcode("M106 S{}\n".format(value))
+
+    def action_light_input(self):
+        try:
+            value = max(0, min(255, int(self.ui.edtLightValue.text())))
+        except ValueError:
+            value = self.ui.sliderLight.value()
+        self.ui.edtLightValue.setText(str(value))
+        self.ui.sliderLight.blockSignals(True)
+        self.ui.sliderLight.setValue(value)
+        self.ui.sliderLight.blockSignals(False)
         self.send_gcode("M106 S{}\n".format(value))
 
     def poll_cam_img_width(self):
         if not self.device_controller.grabbing:
             return
         try:
-            _, width, _ = self.device_controller.get_frame_numpy()
+            _, width, height = self.device_controller.get_frame_numpy()
             if width > 0:
                 self._cam_img_width = width
+                self._cam_img_height = height
                 self.scale_overlay.set_img_width(width)
         except Exception:
             pass
+
+    def _on_display_dblclick(self, wx, wy):
+        """Handle double-click on preview widget: map to image coords and start ROI autofocus."""
+        if not self.device_controller.grabbing:
+            return
+        if not self.device_controller.serial_connected:
+            return
+        widget_w = self.ui.widgetDisplay.width()
+        widget_h = self.ui.widgetDisplay.height()
+        if widget_w == 0 or widget_h == 0:
+            return
+        # Prefer cached dimensions; fall back to a live query
+        img_w = self._cam_img_width
+        img_h = self._cam_img_height
+        if img_w == 0 or img_h == 0:
+            try:
+                _, img_w, img_h = self.device_controller.get_frame_numpy()
+            except Exception:
+                return
+        if img_w == 0 or img_h == 0:
+            return
+        # Map widget pixel → image pixel (SDK stretches to fill widget)
+        img_cx = int(wx * img_w / widget_w)
+        img_cy = int(wy * img_h / widget_h)
+        half = 25
+        img_cx = max(half, min(img_w - half, img_cx))
+        img_cy = max(half, min(img_h - half, img_cy))
+        self._af_roi_center = (img_cx, img_cy)
+        self.start_autofocus()
+
+    def _compute_roi_contrast(self, cx, cy, half=25, sample_count=1):
+        """Contrast-based focus score (Laplacian variance) in a 50×50 ROI at image coords (cx, cy)."""
+        import numpy as np
+
+        scores = []
+        for _ in range(max(1, int(sample_count))):
+            gray, width, height = self.device_controller.get_gray_frame()
+            if gray is None or width == 0 or height == 0:
+                continue
+            x1 = max(0, cx - half)
+            x2 = min(width, cx + half)
+            y1 = max(0, cy - half)
+            y2 = min(height, cy + half)
+            roi = gray[y1:y2, x1:x2]
+            if roi.size < 16:
+                continue
+            roi_f = self._normalize_gray_for_analysis(roi)
+            if roi_f.shape[0] < 3 or roi_f.shape[1] < 3:
+                scores.append(float(np.var(roi_f)))
+                continue
+            # Laplacian variance: classic contrast-based focus measure
+            lap = (
+                roi_f[:-2, 1:-1] + roi_f[2:, 1:-1]
+                + roi_f[1:-1, :-2] + roi_f[1:-1, 2:]
+                - 4.0 * roi_f[1:-1, 1:-1]
+            )
+            scores.append(float(np.var(lap)))
+            if sample_count > 1:
+                time.sleep(0.04)
+        if not scores:
+            return 0.0
+        return float(np.median(scores))
 
     def toggle_scale_bar(self, state):
         self.scale_overlay.set_visible(state == Qt.Checked)
@@ -520,6 +600,11 @@ class MainWindow(QMainWindow):
 
     def _compute_sharpness(self, sample_count=1, roi_fraction=0.65):
         import numpy as np
+
+        # When a ROI center has been set by double-click, use contrast-based focus score
+        if self._af_roi_center is not None:
+            cx, cy = self._af_roi_center
+            return self._compute_roi_contrast(cx, cy, half=25, sample_count=sample_count)
 
         scores = []
         for _ in range(max(1, int(sample_count))):
@@ -860,12 +945,6 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, lambda m=message: self.ui.lblAutoFocusStatus.setText(m))
 
         try:
-            # ── Phase 0: Auto-adjust exposure & gain ──
-            set_status("调参中…")
-            self._af_auto_expose(set_status)
-            if not self.autofocus_running:
-                set_status("已停止"); return
-
             # Phase 1a: 窄范围快速粗扫 ±0.8mm / 0.2mm 步 → 9 个位置
             # 样品通常已接近焦点，大多数情况这一阶段即可定位
             accumulated = 0.0
@@ -899,7 +978,6 @@ class MainWindow(QMainWindow):
                 set_status("对焦失败：串口错误")
                 return
             accumulated = coarse_peak
-            self._af_quick_expose()
 
             # Phase 2: 精扫 ±0.25mm / 0.025mm 步 → 21 个位置 + 二次拟合
             # 粗扫步长 0.2mm，最大误差 ±0.1mm，精扫范围 ±0.25mm 足够覆盖
@@ -955,6 +1033,9 @@ class MainWindow(QMainWindow):
         if self.autofocus_running:
             QMessageBox.warning(self, "提示", "对焦正在进行！", QMessageBox.Ok)
             return
+        # Button click → global focus; double-click path sets _af_roi_center before calling here
+        if self.sender() is self.ui.bnAutoFocus:
+            self._af_roi_center = None
         self.autofocus_running = True
         self.ui.bnAutoFocus.setEnabled(False)
         self.ui.bnStopAutoFocus.setEnabled(True)
