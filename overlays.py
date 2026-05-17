@@ -8,9 +8,8 @@ class ScaleBarOverlay(QWidget):
 
     def __init__(self, target_widget):
         # Must be a top-level window so that WA_TranslucentBackground works via
-        # DWM compositing on Windows.  A child/sibling widget's transparent areas
-        # only show the PARENT background (black), not the SDK-rendered GDI
-        # content inside widgetDisplay.
+        # DWM compositing on Windows. A child/sibling widget's transparent areas
+        # only show the parent background, not the SDK-rendered GDI content.
         super().__init__(
             None,
             Qt.Tool | Qt.FramelessWindowHint | Qt.WindowTransparentForInput
@@ -70,7 +69,10 @@ class ScaleBarOverlay(QWidget):
             bar_len_px = px
         bar_len_px = max(bar_len_px, 4.0)
 
-        label = "{:.0f} µm".format(bar_len_mm * 1000.0)
+        if bar_len_mm < 1.0:
+            label = "{:.0f} um".format(bar_len_mm * 1000.0)
+        else:
+            label = "{:g} mm".format(bar_len_mm)
 
         margin = 16
         bar_h = 8

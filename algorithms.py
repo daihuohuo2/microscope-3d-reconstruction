@@ -1109,7 +1109,7 @@ def _draw_scale_bar_on_array(arr, pixels_per_mm):
     bar_len_px = max(4, int(round(bar_len_mm * pixels_per_mm)))
     # Label: use μm when < 1 mm, otherwise mm
     if bar_len_mm < 1.0:
-        label = "{:g} \u03bcm".format(bar_len_mm * 1000)
+        label = "{:g} um".format(bar_len_mm * 1000)
     else:
         label = "{:g} mm".format(bar_len_mm)
 
