@@ -112,6 +112,7 @@ class CameraOperation:
         self.buf_lock = threading.Lock()  # 取图和存图的buffer锁
         self.dark_frame = None        # 底噪模板（解码后的逐像素 numpy 数组）
         self.apply_dark_sub = False   # 是否启用底噪扣除
+        self.apply_hdr = False        # 是否启用实时 HDR 局部对比度增强
         self._last_log_time = 0.0
 
     # 打开相机
@@ -328,6 +329,11 @@ class CameraOperation:
                             self._apply_dark_sub_locked()
                         except Exception as _e:
                             print("[DarkSub] error:", _e)
+                    if self.apply_hdr:
+                        try:
+                            self._apply_hdr_locked()
+                        except Exception as _e:
+                            print("[HDR] error:", _e)
                 finally:
                     self.buf_lock.release()
 
@@ -413,6 +419,163 @@ class CameraOperation:
         return ret
 
     # 获取当前帧的 numpy 数组副本（用于锐度计算）
+    @staticmethod
+    def _hdr_enhance_u8(image_u8):
+        import numpy as np
+
+        src = np.asarray(image_u8, dtype=np.uint8)
+        try:
+            import cv2
+
+            clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(8, 8))
+            enhanced = clahe.apply(src)
+        except Exception:
+            p1 = float(np.percentile(src, 1.0))
+            p99 = float(np.percentile(src, 99.0))
+            if p99 <= p1 + 1.0:
+                return src.copy()
+            enhanced = np.clip((src.astype(np.float32) - p1) * 255.0 / (p99 - p1), 0, 255).astype(np.uint8)
+
+        base = src.astype(np.float32)
+        detail = enhanced.astype(np.float32)
+        return np.clip(base * 0.25 + detail * 0.75, 0, 255).astype(np.uint8)
+
+    def _apply_hdr_to_linear_u8(self, raw, width, height):
+        import numpy as np
+
+        image = raw[: width * height].reshape(height, width)
+        raw[: width * height] = self._hdr_enhance_u8(image).reshape(-1).astype(np.uint8)
+
+    def _apply_hdr_to_linear_u16(self, raw, width, height, max_value):
+        import numpy as np
+
+        pixel_count = width * height
+        image16 = raw[:pixel_count].reshape(height, width)
+        image8 = np.clip(image16.astype(np.float32) / float(max_value) * 255.0, 0, 255).astype(np.uint8)
+        enhanced8 = self._hdr_enhance_u8(image8)
+        raw[:pixel_count] = np.clip(
+            enhanced8.astype(np.float32) / 255.0 * float(max_value), 0, max_value
+        ).astype(np.uint16).reshape(-1)
+
+    def _apply_hdr_to_packed12(self, raw, pixel_count, width, height):
+        import numpy as np
+
+        packed = raw[: (pixel_count * 3 + 1) // 2]
+        groups = packed[: (len(packed) // 3) * 3].reshape(-1, 3).astype(np.uint16)
+        out = np.empty(groups.shape[0] * 2, dtype=np.uint16)
+        out[0::2] = groups[:, 0] | ((groups[:, 1] & 0x0F) << 8)
+        out[1::2] = (groups[:, 1] >> 4) | (groups[:, 2] << 4)
+        if len(out) < pixel_count and len(packed) % 3 == 2:
+            tail = np.array([packed[-2] | ((packed[-1] & 0x0F) << 8)], dtype=np.uint16)
+            out = np.concatenate([out, tail])
+        corrected = out[:pixel_count].copy()
+        self._apply_hdr_to_linear_u16(corrected, width, height, 4095)
+
+        full_pairs = pixel_count // 2
+        if full_pairs:
+            even = corrected[: full_pairs * 2:2]
+            odd = corrected[1: full_pairs * 2:2]
+            packed_groups = packed[: full_pairs * 3].reshape(-1, 3)
+            packed_groups[:, 0] = (even & 0xFF).astype(np.uint8)
+            packed_groups[:, 1] = (((even >> 8) & 0x0F) | ((odd & 0x0F) << 4)).astype(np.uint8)
+            packed_groups[:, 2] = ((odd >> 4) & 0xFF).astype(np.uint8)
+        if pixel_count % 2 and len(packed) >= full_pairs * 3 + 2:
+            last = corrected[-1]
+            packed[full_pairs * 3] = int(last & 0xFF)
+            packed[full_pairs * 3 + 1] = int((last >> 8) & 0x0F)
+
+    def _apply_hdr_locked(self):
+        import numpy as np
+
+        if self.buf_save_image is None:
+            return
+        w = int(self.st_frame_info.nWidth)
+        h = int(self.st_frame_info.nHeight)
+        pixel_count = w * h
+        if pixel_count <= 0:
+            return
+
+        pixel_type = self.st_frame_info.enPixelType
+        frame_len = int(self.st_frame_info.nFrameLen)
+        rgb8 = globals().get("PixelType_Gvsp_RGB8_Packed")
+        bgr8 = globals().get("PixelType_Gvsp_BGR8_Packed")
+
+        if pixel_type == PixelType_Gvsp_Mono8 or pixel_type in (
+            PixelType_Gvsp_BayerGR8,
+            PixelType_Gvsp_BayerRG8,
+            PixelType_Gvsp_BayerGB8,
+            PixelType_Gvsp_BayerBG8,
+            PixelType_Gvsp_BayerRBGG8,
+        ):
+            raw = np.frombuffer(self.buf_save_image, dtype=np.uint8, count=min(frame_len, pixel_count))
+            if raw.size >= pixel_count:
+                self._apply_hdr_to_linear_u8(raw, w, h)
+            return
+
+        if (rgb8 is not None and pixel_type == rgb8) or (bgr8 is not None and pixel_type == bgr8):
+            if frame_len < pixel_count * 3:
+                return
+            raw = np.frombuffer(self.buf_save_image, dtype=np.uint8, count=pixel_count * 3)
+            image = raw.reshape(h, w, 3)
+            try:
+                import cv2
+
+                code_to_ycc = cv2.COLOR_RGB2YCrCb if pixel_type == rgb8 else cv2.COLOR_BGR2YCrCb
+                code_from_ycc = cv2.COLOR_YCrCb2RGB if pixel_type == rgb8 else cv2.COLOR_YCrCb2BGR
+                ycc = cv2.cvtColor(image, code_to_ycc)
+                ycc[:, :, 0] = self._hdr_enhance_u8(ycc[:, :, 0])
+                raw[:] = cv2.cvtColor(ycc, code_from_ycc).reshape(-1)
+            except Exception:
+                for channel in range(3):
+                    image[:, :, channel] = self._hdr_enhance_u8(image[:, :, channel])
+            return
+
+        if pixel_type in (
+            PixelType_Gvsp_Mono10,
+            PixelType_Gvsp_BayerGR10,
+            PixelType_Gvsp_BayerRG10,
+            PixelType_Gvsp_BayerGB10,
+            PixelType_Gvsp_BayerBG10,
+        ):
+            raw = np.frombuffer(self.buf_save_image, dtype=np.uint16, count=min(pixel_count, frame_len // 2))
+            if raw.size >= pixel_count:
+                self._apply_hdr_to_linear_u16(raw, w, h, 1023)
+            return
+
+        if pixel_type in (
+            PixelType_Gvsp_Mono12,
+            PixelType_Gvsp_BayerGR12,
+            PixelType_Gvsp_BayerRG12,
+            PixelType_Gvsp_BayerGB12,
+            PixelType_Gvsp_BayerBG12,
+        ):
+            raw = np.frombuffer(self.buf_save_image, dtype=np.uint16, count=min(pixel_count, frame_len // 2))
+            if raw.size >= pixel_count:
+                self._apply_hdr_to_linear_u16(raw, w, h, 4095)
+            return
+
+        if pixel_type in (
+            PixelType_Gvsp_BayerGR16,
+            PixelType_Gvsp_BayerRG16,
+            PixelType_Gvsp_BayerGB16,
+            PixelType_Gvsp_BayerBG16,
+        ):
+            raw = np.frombuffer(self.buf_save_image, dtype=np.uint16, count=min(pixel_count, frame_len // 2))
+            if raw.size >= pixel_count:
+                self._apply_hdr_to_linear_u16(raw, w, h, 65535)
+            return
+
+        if pixel_type in (
+            PixelType_Gvsp_Mono12_Packed,
+            PixelType_Gvsp_BayerGR12_Packed,
+            PixelType_Gvsp_BayerRG12_Packed,
+            PixelType_Gvsp_BayerGB12_Packed,
+            PixelType_Gvsp_BayerBG12_Packed,
+        ):
+            raw = np.frombuffer(self.buf_save_image, dtype=np.uint8, count=frame_len)
+            if raw.size >= (pixel_count * 3 + 1) // 2:
+                self._apply_hdr_to_packed12(raw, pixel_count, w, h)
+
     def _apply_dark_sub_locked(self):
         import numpy as np
 

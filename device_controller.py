@@ -490,6 +490,10 @@ class DeviceController:
         if self.obj_cam_operation:
             self.obj_cam_operation.apply_dark_sub = bool(enabled)
 
+    def set_hdr_enabled(self, enabled):
+        if self.obj_cam_operation:
+            self.obj_cam_operation.apply_hdr = bool(enabled)
+
     def _ensure_camera(self):
         if not self.obj_cam_operation or not self.opened:
             raise RuntimeError("Camera is not open")

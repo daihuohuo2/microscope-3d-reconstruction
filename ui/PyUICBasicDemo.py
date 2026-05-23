@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 # Layout: Camera (left, stretch) | Right-Panel (two columns, fixed width)
-#   Right-Col-1: 初始化 / 采集(含自动对焦) / 参数 / 自动拍摄
-#   Right-Col-2: 串口设置 / 运动控制 / 比例尺 / 底噪扣除
+#   Right-Col-1: 初始化 / 采集(含自动对焦) / 参数 / HDR增强 / 比例尺 / 底噪扣除
+#   Right-Col-2: 串口设置 / 运动控制
 # All groups visible at default window size (~1200x700) without scrolling.
 
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -60,6 +60,7 @@ class Ui_MainWindow(object):
         col1V.addWidget(self._make_init_group())
         col1V.addWidget(self._make_grab_group())
         col1V.addWidget(self._make_param_group())
+        col1V.addWidget(self._make_hdr_group())
         col1V.addWidget(self._make_scale_group())
         col1V.addWidget(self._make_dark_group())
         col1V.addStretch(1)
@@ -181,6 +182,29 @@ class Ui_MainWindow(object):
 
         g.setColumnStretch(0, 2); g.setColumnStretch(1, 3)
         self.groupParam = grp
+        return grp
+
+    def _make_hdr_group(self):
+        grp = QtWidgets.QGroupBox()
+        grp.setEnabled(False)
+        grp.setObjectName("groupHdr")
+        g = QtWidgets.QGridLayout(grp)
+        g.setContentsMargins(*_COMPACT_MARGINS)
+        g.setSpacing(_COMPACT_SPACING)
+
+        self.chkHdr = QtWidgets.QCheckBox()
+        self.chkHdr.setObjectName("chkHdr")
+        g.addWidget(self.chkHdr, 0, 0)
+
+        self.lblHdrStatus = QtWidgets.QLabel()
+        self.lblHdrStatus.setObjectName("lblHdrStatus")
+        self.lblHdrStatus.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+        self.lblHdrStatus.setWordWrap(True)
+        self.lblHdrStatus.setStyleSheet("font-size: 10px; color: #555;")
+        g.addWidget(self.lblHdrStatus, 0, 1)
+
+        g.setColumnStretch(0, 1); g.setColumnStretch(1, 2)
+        self.groupHdr = grp
         return grp
 
     def _make_serial_group(self):
@@ -382,6 +406,9 @@ class Ui_MainWindow(object):
         self.edtFrameRate.setText(          _("MainWindow", "0"))
         self.bnGetParam.setText(            _("MainWindow", "获取参数"))
         self.bnSetParam.setText(            _("MainWindow", "设置参数"))
+        self.groupHdr.setTitle(             _("MainWindow", "HDR增强"))
+        self.chkHdr.setText(                _("MainWindow", "启用 HDR"))
+        self.lblHdrStatus.setText(          _("MainWindow", "未开启"))
         self.groupSerial.setTitle(          _("MainWindow", "串口设置"))
         self.label_serial_port.setText(     _("MainWindow", "串口名称"))
         self.bnRefreshPort.setText(         _("MainWindow", "刷新串口"))

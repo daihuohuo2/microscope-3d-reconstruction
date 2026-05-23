@@ -74,6 +74,7 @@
 | **启用底噪扣除** `chkDarkSub` | `stateChanged` | `toggle_dark_sub` | `L102` |
 | **清除底噪帧** `bnClearDark` | `clicked` | `clear_dark_frame` | `L103` |
 | **显示比例尺** `chkShowScaleBar` | `stateChanged` | `toggle_scale_bar` | `L104` |
+| **启用 HDR** `chkHdr` | `stateChanged` | `toggle_hdr` | 主窗口绑定区 |
 
 ### 2.3 菜单栏 `_create_menu`（行 `L106`）
 
@@ -152,7 +153,15 @@
 | 启用/禁用底噪扣除 | `L102`（绑定） | `toggle_dark_sub` — 控制 `DeviceController` 实时扣除 |
 | 清除底噪帧 | `L103`（绑定） | `clear_dark_frame` |
 
-### 2.10 自动对焦
+### 2.10 HDR 增强
+
+| 功能 | 行号 | 函数 |
+|------|------|------|
+| 启用/禁用 HDR | 绑定区 | `toggle_hdr` — 控制 `DeviceController.set_hdr_enabled()` |
+| 实时增强帧缓冲 | `sdk/CamOperation_class.py` | `_apply_hdr_locked` — 在显示前增强 Mono/Bayer/RGB 常见像素格式 |
+| 局部对比度算法 | `sdk/CamOperation_class.py` | `_hdr_enhance_u8` — 优先 CLAHE，缺少 OpenCV 时退回百分位拉伸 |
+
+### 2.11 自动对焦
 
 | 功能 | 行号 | 函数 |
 |------|------|------|

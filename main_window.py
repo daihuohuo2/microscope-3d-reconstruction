@@ -109,6 +109,7 @@ class MainWindow(QMainWindow):
         self.ui.chkDarkSub.stateChanged.connect(self.toggle_dark_sub)
         self.ui.bnClearDark.clicked.connect(self.clear_dark_frame)
         self.ui.chkShowScaleBar.stateChanged.connect(self.toggle_scale_bar)
+        self.ui.chkHdr.stateChanged.connect(self.toggle_hdr)
 
     def _create_menu(self):
         menubar = self.menuBar()
@@ -1202,6 +1203,11 @@ class MainWindow(QMainWindow):
         self.device_controller.set_dark_sub_enabled(enabled)
         self._update_dark_sub_status_label(self.dark_frame_captured, enabled)
 
+    def toggle_hdr(self, state):
+        enabled = state == Qt.Checked
+        self.device_controller.set_hdr_enabled(enabled)
+        self.ui.lblHdrStatus.setText("实时增强中" if enabled else "未开启")
+
     def _update_dark_sub_status_label(self, captured, enabled):
         if not captured:
             self.ui.lblDarkSubStatus.setText("未采集")
@@ -1265,6 +1271,7 @@ class MainWindow(QMainWindow):
         is_grabbing = self.device_controller.grabbing
         self.ui.groupGrab.setEnabled(is_open)
         self.ui.groupParam.setEnabled(is_open)
+        self.ui.groupHdr.setEnabled(is_open)
 
         self.ui.bnOpen.setEnabled(not is_open)
         self.ui.bnClose.setEnabled(is_open)
@@ -1277,7 +1284,10 @@ class MainWindow(QMainWindow):
         self._update_z_motion_buttons()
         if not (is_open and is_grabbing):
             self.device_controller.set_dark_sub_enabled(False)
+            self.device_controller.set_hdr_enabled(False)
             self.ui.chkDarkSub.setChecked(False)
+            self.ui.chkHdr.setChecked(False)
+            self.ui.lblHdrStatus.setText("未开启")
 
     @staticmethod
     def is_float(value):
