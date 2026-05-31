@@ -763,16 +763,28 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(self, "快速比例尺", message, QMessageBox.Ok)
 
     def start_quick_scale(self):
-        if not self.device_controller.grabbing:
-            QMessageBox.warning(self, "错误", "请先开始采集！", QMessageBox.Ok)
-            return
         if self.quick_scale_running:
-            QMessageBox.warning(self, "提示", "快速比例尺正在进行中！", QMessageBox.Ok)
+            QMessageBox.warning(self, "提示", "比例尺正在更新！", QMessageBox.Ok)
             return
-        self.quick_scale_running = True
-        self.ui.bnQuickScale.setEnabled(False)
-        self.ui.lblQuickScaleStatus.setText("识别圆点中…")
-        threading.Thread(target=self._quick_scale_worker, daemon=True).start()
+        try:
+            mag = self._current_magnification()
+            if mag is None or mag <= 0:
+                QMessageBox.warning(self, "比例尺", "请输入有效的物镜倍率。", QMessageBox.Ok)
+                return
+            curve_ppmm = self._lookup_curve_pixels_per_mm(mag)
+            self.config_manager.magnification = mag
+            self._set_pixels_per_mm(curve_ppmm)
+            self.save_settings()
+            self.ui.chkShowScaleBar.setChecked(True)
+            self.scale_overlay.set_visible(True)
+            if self.device_controller.grabbing:
+                self.poll_cam_img_width()
+            self.ui.lblQuickScaleStatus.setText(
+                "已应用倍率 {:.2f}x → {:.2f} px/mm".format(mag, curve_ppmm)
+            )
+        except Exception as exc:
+            QMessageBox.warning(self, "比例尺", str(exc), QMessageBox.Ok)
+            self.ui.lblQuickScaleStatus.setText("应用失败: " + str(exc))
 
     @staticmethod
     def _normalize_gray_for_analysis(gray):
@@ -1435,7 +1447,7 @@ class MainWindow(QMainWindow):
         self.ui.bnStop.setEnabled(is_open and is_grabbing)
         self.ui.bnAutoFocus.setEnabled(is_open and is_grabbing and not self.autofocus_running)
         self.ui.bnStopAutoFocus.setEnabled(self.autofocus_running)
-        self.ui.bnQuickScale.setEnabled(is_open and is_grabbing and not self.quick_scale_running)
+        self.ui.bnQuickScale.setEnabled(not self.quick_scale_running)
         self.ui.bnCaptureDark.setEnabled(is_open and is_grabbing)
         self._update_z_motion_buttons()
         if not (is_open and is_grabbing):

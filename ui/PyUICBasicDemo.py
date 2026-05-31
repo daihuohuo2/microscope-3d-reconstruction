@@ -337,6 +337,8 @@ class Ui_MainWindow(object):
         self.edtDotSpacing = QtWidgets.QLineEdit(); self.edtDotSpacing.setObjectName("edtDotSpacing")
         self.edtDotSpacing.setText("200")
         self.edtDotSpacing.setMaximumWidth(70)
+        self.label_dot_spacing.setVisible(False)
+        self.edtDotSpacing.setVisible(False)
         g.addWidget(self.label_dot_spacing, 2, 0, 1, 2)
         g.addWidget(self.edtDotSpacing,     2, 2)
 
@@ -440,7 +442,7 @@ class Ui_MainWindow(object):
         self.edtPixelsPerMm.setText(        _("MainWindow", "100.0"))
         self.label_magnification.setText(   _("MainWindow", "物镜倍率"))
         self.label_dot_spacing.setText(      _("MainWindow", "点距(µm)"))
-        self.bnQuickScale.setText(          _("MainWindow", "快速比例尺"))
+        self.bnQuickScale.setText(          _("MainWindow", "应用倍率比例尺"))
         self.lblQuickScaleStatus.setText(   _("MainWindow", "就绪"))
         self.groupDarkSub.setTitle(         _("MainWindow", "底噪扣除"))
         self.bnCaptureDark.setText(         _("MainWindow", "采集底噪帧"))
