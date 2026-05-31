@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import QWidget
 
 
 class ScaleBarOverlay(QWidget):
-    NICE_LENGTHS_MM = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0]
+    BAR_WIDTH_FRACTION = 0.20
 
     def __init__(self, target_widget):
         # Must be a top-level window so that WA_TranslucentBackground works via
@@ -58,21 +58,13 @@ class ScaleBarOverlay(QWidget):
 
         scale_factor = display_w / self._img_width if self._img_width > 0 else 1.0
         display_ppmm = self._pixels_per_mm * scale_factor
-        target_px = display_w * 0.20
-        bar_len_mm = self.NICE_LENGTHS_MM[0]
-        bar_len_px = bar_len_mm * display_ppmm
-        for length in self.NICE_LENGTHS_MM:
-            px = length * display_ppmm
-            if px > target_px:
-                break
-            bar_len_mm = length
-            bar_len_px = px
-        bar_len_px = max(bar_len_px, 4.0)
+        bar_len_px = max(display_w * self.BAR_WIDTH_FRACTION, 4.0)
+        bar_len_mm = bar_len_px / max(display_ppmm, 0.001)
 
         if bar_len_mm < 1.0:
             label = "{:.0f} um".format(bar_len_mm * 1000.0)
         else:
-            label = "{:g} mm".format(bar_len_mm)
+            label = "{:.2f} mm".format(bar_len_mm).rstrip("0").rstrip(".") + " mm"
 
         margin = 16
         bar_h = 8

@@ -27,6 +27,21 @@ class MainWindow(QMainWindow):
     _quick_scale_fail = pyqtSignal(str)    # 线程安全：错误信息 → 主线程弹窗
     DEFAULT_EXPOSURE_US = 80000.0
     DEFAULT_GAIN_DB = 5.0
+    MAGNIFICATION_SCALE_TABLE = [
+        (0.7, 439.0185), (0.8, 481.4586), (0.9, 546.7106), (1.0, 625.1945),
+        (1.1, 691.8781), (1.2, 752.3955), (1.3, 777.7159), (1.4, 869.0678),
+        (1.5, 959.5854), (1.6, 910.9615), (1.7, 1068.2162), (1.8, 1137.9918),
+        (1.9, 1159.1079), (2.0, 1194.4625), (2.1, 1273.0709), (2.2, 1299.7029),
+        (2.3, 1239.4471), (2.4, 1482.0338), (2.5, 1532.8936), (2.6, 1622.9466),
+        (2.7, 1687.4260), (2.8, 1715.2986), (2.9, 1775.1524), (3.0, 1849.5680),
+        (3.1, 1951.2858), (3.2, 2018.0778), (3.3, 2046.1368), (3.4, 2042.3262),
+        (3.5, 2147.2584), (3.6, 2122.9608), (3.7, 2321.6342), (3.8, 2302.5984),
+        (3.9, 2354.7970), (4.0, 2461.2426), (4.1, 2557.7970), (4.2, 2613.0566),
+        (4.3, 2663.3777), (4.4, 2739.3315), (4.5, 2773.7936), (4.6, 2760.1828),
+        (4.7, 2755.1015), (4.8, 2870.0385), (4.9, 3051.7449), (5.0, 3126.2564),
+        (5.1, 3164.7405), (5.2, 3228.6153), (5.3, 3297.4938), (5.4, 3310.0723),
+        (5.5, 3370.7108), (5.6, 3465.4857),
+    ]
 
     def __init__(self):
         super().__init__()
@@ -109,6 +124,8 @@ class MainWindow(QMainWindow):
         self.ui.bnQuickScale.clicked.connect(self.start_quick_scale)
         self._quick_scale_done.connect(self._on_quick_scale_done)
         self._quick_scale_fail.connect(self._on_quick_scale_fail)
+        self.ui.edtMagnification.editingFinished.connect(self.apply_magnification_scale)
+        self.ui.edtPixelsPerMm.editingFinished.connect(self.apply_manual_pixels_per_mm)
         self.ui.bnCaptureDark.clicked.connect(self.capture_dark_frame)
         self.ui.chkDarkSub.stateChanged.connect(self.toggle_dark_sub)
         self.ui.bnClearDark.clicked.connect(self.clear_dark_frame)
@@ -149,6 +166,7 @@ class MainWindow(QMainWindow):
                 self.ui.cmbSerialPort.setCurrentIndex(port_index)
 
         self._update_serial_status()
+        self.ui.edtMagnification.setText("{:.2f}".format(config.magnification).rstrip("0").rstrip("."))
         self.ui.edtPixelsPerMm.setText("{:.4f}".format(config.pixels_per_mm))
         self.scale_overlay.set_pixels_per_mm(config.pixels_per_mm)
 
@@ -159,6 +177,62 @@ class MainWindow(QMainWindow):
         self.config_manager.baud_rate = self.ui.cmbBaudRate.currentText()
         self.config_manager.serial_timeout = self.ui.edtSerialTimeout.text().strip()
         self.config_manager.save()
+
+    @classmethod
+    def _lookup_curve_pixels_per_mm(cls, magnification):
+        mag = float(magnification)
+        table = cls.MAGNIFICATION_SCALE_TABLE
+        if mag <= table[0][0]:
+            x0, y0 = table[0]
+            x1, y1 = table[1]
+        elif mag >= table[-1][0]:
+            x0, y0 = table[-2]
+            x1, y1 = table[-1]
+        else:
+            for idx in range(len(table) - 1):
+                x0, y0 = table[idx]
+                x1, y1 = table[idx + 1]
+                if x0 <= mag <= x1:
+                    break
+        ratio = (mag - x0) / (x1 - x0)
+        return y0 + ratio * (y1 - y0)
+
+    def _set_pixels_per_mm(self, ppmm):
+        ppmm = max(float(ppmm), 0.001)
+        self.config_manager.pixels_per_mm = ppmm
+        self.ui.edtPixelsPerMm.setText("{:.4f}".format(ppmm))
+        self.scale_overlay.set_pixels_per_mm(ppmm)
+        self.scale_overlay.update()
+
+    def _current_magnification(self):
+        text = self.ui.edtMagnification.text().strip()
+        if not text:
+            return None
+        return float(text)
+
+    def apply_magnification_scale(self):
+        try:
+            mag = self._current_magnification()
+            if mag is None or mag <= 0:
+                return
+            curve_ppmm = self._lookup_curve_pixels_per_mm(mag)
+            ppmm = curve_ppmm * self.config_manager.scale_curve_factor
+            self.config_manager.magnification = mag
+            self._set_pixels_per_mm(ppmm)
+            self.save_settings()
+            self.ui.lblQuickScaleStatus.setText(
+                "倍率 {:.2f}x → {:.2f} px/mm".format(mag, ppmm)
+            )
+        except Exception as exc:
+            self.ui.lblQuickScaleStatus.setText("倍率换算失败: " + str(exc))
+
+    def apply_manual_pixels_per_mm(self):
+        try:
+            ppmm = float(self.ui.edtPixelsPerMm.text().strip())
+            self._set_pixels_per_mm(ppmm)
+            self.save_settings()
+        except Exception as exc:
+            self.ui.lblQuickScaleStatus.setText("像素/mm无效: " + str(exc))
 
     def enum_devices(self):
         try:
@@ -658,9 +732,15 @@ class MainWindow(QMainWindow):
     def _on_quick_scale_done(self, result):
         try:
             ppmm = result["pixels_per_mm"]
-            self.config_manager.pixels_per_mm = ppmm
-            self.ui.edtPixelsPerMm.setText("{:.4f}".format(ppmm))
-            self.scale_overlay.set_pixels_per_mm(ppmm)
+            mag = self._current_magnification()
+            curve_factor = None
+            if mag is not None and mag > 0:
+                curve_ppmm = self._lookup_curve_pixels_per_mm(mag)
+                if curve_ppmm > 0:
+                    curve_factor = ppmm / curve_ppmm
+                    self.config_manager.magnification = mag
+                    self.config_manager.scale_curve_factor = curve_factor
+            self._set_pixels_per_mm(ppmm)
             self.save_settings()
             self.ui.chkShowScaleBar.setChecked(True)
             self.scale_overlay.set_visible(True)
@@ -670,11 +750,12 @@ class MainWindow(QMainWindow):
                 spacing_um = float(self.ui.edtDotSpacing.text())
             except ValueError:
                 spacing_um = CALIB_DOT_SPACING_UM
-            self.ui.lblQuickScaleStatus.setText(
-                "完成 ✓ {}点 | {:.2f}px≈{}µm".format(
-                    result["blob_count"], result["spacing_px"], int(spacing_um)
-                )
+            status = "完成 ✓ {}点 | {:.2f}px≈{}µm".format(
+                result["blob_count"], result["spacing_px"], int(spacing_um)
             )
+            if curve_factor is not None:
+                status += " | 倍率曲线修正 {:.4f}x".format(curve_factor)
+            self.ui.lblQuickScaleStatus.setText(status)
         except Exception as e:
             self.ui.lblQuickScaleStatus.setText("UI更新失败: " + str(e))
 

@@ -10,6 +10,8 @@ class AppConfig:
     baud_rate: str = "19200"
     serial_timeout: str = "1.0"
     pixels_per_mm: float = 100.0
+    magnification: float = 1.0
+    scale_curve_factor: float = 1.0
 
 
 class ConfigManager:
@@ -32,8 +34,24 @@ class ConfigManager:
                 )
             except ValueError:
                 self.config.pixels_per_mm = 100.0
+            try:
+                self.config.magnification = float(
+                    parser.get("Scale", "magnification", fallback="1.0")
+                )
+            except ValueError:
+                self.config.magnification = 1.0
+            try:
+                self.config.scale_curve_factor = float(
+                    parser.get("Scale", "scale_curve_factor", fallback="1.0")
+                )
+            except ValueError:
+                self.config.scale_curve_factor = 1.0
         if self.config.pixels_per_mm <= 0:
             self.config.pixels_per_mm = 100.0
+        if self.config.magnification <= 0:
+            self.config.magnification = 1.0
+        if self.config.scale_curve_factor <= 0:
+            self.config.scale_curve_factor = 1.0
         return self.config
 
     def save(self):
@@ -44,7 +62,11 @@ class ConfigManager:
             "baud_rate": self.config.baud_rate,
             "timeout": self.config.serial_timeout,
         }
-        parser["Scale"] = {"pixels_per_mm": str(self.config.pixels_per_mm)}
+        parser["Scale"] = {
+            "pixels_per_mm": str(self.config.pixels_per_mm),
+            "magnification": str(self.config.magnification),
+            "scale_curve_factor": str(self.config.scale_curve_factor),
+        }
         with open(self.settings_file, "w", encoding="utf-8") as file:
             parser.write(file)
 
@@ -87,6 +109,22 @@ class ConfigManager:
     @pixels_per_mm.setter
     def pixels_per_mm(self, value):
         self.config.pixels_per_mm = float(value)
+
+    @property
+    def magnification(self):
+        return self.config.magnification
+
+    @magnification.setter
+    def magnification(self, value):
+        self.config.magnification = float(value)
+
+    @property
+    def scale_curve_factor(self):
+        return self.config.scale_curve_factor
+
+    @scale_curve_factor.setter
+    def scale_curve_factor(self, value):
+        self.config.scale_curve_factor = float(value)
 
     def effective_save_path(self):
         return self.save_path or self.default_dir

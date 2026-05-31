@@ -1188,21 +1188,13 @@ def _draw_scale_bar_on_array(arr, pixels_per_mm):
     if h < 32 or w < 32 or pixels_per_mm <= 0:
         return arr
 
-    nice_lengths_mm = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0]
-    target_px = w * 0.20
-    bar_len_mm = nice_lengths_mm[0]
-    for length in nice_lengths_mm:
-        px = int(round(length * pixels_per_mm))
-        if px > target_px:
-            break
-        bar_len_mm = length
-
-    bar_len_px = max(4, int(round(bar_len_mm * pixels_per_mm)))
+    bar_len_px = max(4, int(round(w * 0.20)))
+    bar_len_mm = bar_len_px / float(pixels_per_mm)
     # Label: use μm when < 1 mm, otherwise mm
     if bar_len_mm < 1.0:
-        label = "{:g} um".format(bar_len_mm * 1000)
+        label = "{:.0f} um".format(bar_len_mm * 1000)
     else:
-        label = "{:g} mm".format(bar_len_mm)
+        label = "{:.2f} mm".format(bar_len_mm).rstrip("0").rstrip(".") + " mm"
 
     try:
         import cv2 as _cv2

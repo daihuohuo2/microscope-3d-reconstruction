@@ -327,24 +327,30 @@ class Ui_MainWindow(object):
         g.addWidget(self.label_ppmm,     0, 1)
         g.addWidget(self.edtPixelsPerMm, 0, 2)
 
+        self.label_magnification = QtWidgets.QLabel(); self.label_magnification.setObjectName("label_magnification")
+        self.edtMagnification = QtWidgets.QLineEdit(); self.edtMagnification.setObjectName("edtMagnification")
+        self.edtMagnification.setMaximumWidth(70)
+        g.addWidget(self.label_magnification, 1, 0, 1, 2)
+        g.addWidget(self.edtMagnification,     1, 2)
+
         self.label_dot_spacing = QtWidgets.QLabel(); self.label_dot_spacing.setObjectName("label_dot_spacing")
         self.edtDotSpacing = QtWidgets.QLineEdit(); self.edtDotSpacing.setObjectName("edtDotSpacing")
         self.edtDotSpacing.setText("200")
         self.edtDotSpacing.setMaximumWidth(70)
-        g.addWidget(self.label_dot_spacing, 1, 0, 1, 2)
-        g.addWidget(self.edtDotSpacing,     1, 2)
+        g.addWidget(self.label_dot_spacing, 2, 0, 1, 2)
+        g.addWidget(self.edtDotSpacing,     2, 2)
 
         self.bnQuickScale = QtWidgets.QPushButton()
         self.bnQuickScale.setEnabled(False)
         self.bnQuickScale.setObjectName("bnQuickScale")
-        g.addWidget(self.bnQuickScale, 2, 0, 1, 1)
+        g.addWidget(self.bnQuickScale, 3, 0, 1, 1)
 
         self.lblQuickScaleStatus = QtWidgets.QLabel()
         self.lblQuickScaleStatus.setObjectName("lblQuickScaleStatus")
         self.lblQuickScaleStatus.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
         self.lblQuickScaleStatus.setWordWrap(True)
         self.lblQuickScaleStatus.setStyleSheet("font-size: 10px; color: #444;")
-        g.addWidget(self.lblQuickScaleStatus, 2, 1, 1, 2)
+        g.addWidget(self.lblQuickScaleStatus, 3, 1, 1, 2)
 
         g.setColumnStretch(0, 3); g.setColumnStretch(1, 2); g.setColumnStretch(2, 3)
         self.groupScaleBar = grp
@@ -432,6 +438,7 @@ class Ui_MainWindow(object):
         self.chkShowScaleBar.setText(       _("MainWindow", "显示比例尺"))
         self.label_ppmm.setText(            _("MainWindow", "像素/mm"))
         self.edtPixelsPerMm.setText(        _("MainWindow", "100.0"))
+        self.label_magnification.setText(   _("MainWindow", "物镜倍率"))
         self.label_dot_spacing.setText(      _("MainWindow", "点距(µm)"))
         self.bnQuickScale.setText(          _("MainWindow", "快速比例尺"))
         self.lblQuickScaleStatus.setText(   _("MainWindow", "就绪"))
