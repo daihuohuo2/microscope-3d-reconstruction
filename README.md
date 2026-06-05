@@ -1,7 +1,7 @@
 # 显微成像三维重建系统
 
 [![Python Version](https://img.shields.io/badge/python-3.7%2B-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)](https://www.microsoft.com/windows)
 
 一个基于焦点堆叠（Focus Stacking）和深度重建技术的显微成像三维重建系统。通过控制 Z 轴扫描和相机自动拍摄，生成深度图、点云数据和全焦合成图像。
@@ -133,8 +133,8 @@ output/
 
 ### 1. 克隆仓库
 ```bash
-git clone https://github.com/yourusername/microscope-3d-reconstruction.git
-cd microscope-3d-reconstruction
+git clone https://github.com/daihuohuo2/code.git
+cd code
 ```
 
 ### 2. 安装依赖
@@ -318,7 +318,11 @@ pip install -r requirements.txt
 
 ## 📄 许可证
 
-本项目采用 MIT 许可证。详见 [LICENSE](LICENSE) 文件。
+本项目采用 GNU General Public License v3.0（GPL-3.0）开源协议。详见 [LICENSE](LICENSE) 文件。
+
+扫描下方二维码可访问项目开源仓库：
+
+![开源仓库二维码](assets/open_source_qr.png)
 
 ---
 
@@ -326,7 +330,7 @@ pip install -r requirements.txt
 
 如有问题或建议，欢迎通过以下方式联系：
 
-- 提交 Issue：[GitHub Issues](https://github.com/yourusername/microscope-3d-reconstruction/issues)
+- 提交 Issue：[GitHub Issues](https://github.com/daihuohuo2/code/issues)
 - 邮箱：your.email@example.com
 
 ---
