@@ -133,7 +133,7 @@ output/
 
 ### 1. 克隆仓库
 ```bash
-git clone https://github.com/daihuohuo2/code.git
+git clone https://github.com/daihuohuo2/microscope-3d-reconstruction.git
 cd code
 ```
 
@@ -330,7 +330,7 @@ pip install -r requirements.txt
 
 如有问题或建议，欢迎通过以下方式联系：
 
-- 提交 Issue：[GitHub Issues](https://github.com/daihuohuo2/code/issues)
+- 提交 Issue：[GitHub Issues](https://github.com/daihuohuo2/microscope-3d-reconstruction/issues)
 - 邮箱：your.email@example.com
 
 ---
