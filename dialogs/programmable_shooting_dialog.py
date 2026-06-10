@@ -44,10 +44,10 @@ GAIN_MIN = 0
 GAIN_MAX = 20
 LIGHT_MIN = 0
 LIGHT_MAX = 255
-LIGHT_ON_DURATION = 20      # 秒
-LIGHT_STABILIZE_SECS = 1.5  # 开灯后等待灯光物理稳定的最短时间（秒）
-FRESH_FRAME_MIN = 2          # 拍照前要求至少到来的新帧数
-FRESH_FRAME_TIMEOUT = 8.0   # 等待新帧的超时时间（秒）
+LIGHT_ON_DURATION = 20       # 秒
+LIGHT_STABILIZE_SECS = 3.0   # 开灯后等待灯光和白平衡稳定的最短时间（秒）
+FRESH_FRAME_MIN = 3          # 拍照前要求至少到来的新帧数
+FRESH_FRAME_TIMEOUT = 12.0   # 等待新帧的超时时间（秒）
 
 
 def _clamp(value, lo, hi):
@@ -378,6 +378,15 @@ class ProgrammableShootingDialog(QDialog):
         except Exception:
             self._sig_log.emit("灯光控制失败")
 
+    def _sleep_with_stop(self, seconds):
+        """Sleep in short chunks so the stop button still responds promptly."""
+        deadline = time.time() + max(0.0, seconds)
+        while time.time() < deadline:
+            if self._stop_requested:
+                return False
+            time.sleep(min(0.1, deadline - time.time()))
+        return True
+
     def _wait_for_new_frame(self, min_frames=FRESH_FRAME_MIN, timeout=FRESH_FRAME_TIMEOUT):
         """阻塞直到相机采集了至少 min_frames 帧新图像，或超时。
         通过对比 nFrameNum 的变化来判断是否有新帧到来，确保保存的是
@@ -401,6 +410,22 @@ class ProgrammableShootingDialog(QDialog):
                 return
             time.sleep(0.05)
         self._sig_log.emit("警告: 等待新帧超时（{}s），继续拍摄".format(timeout))
+
+    def _wait_for_light_ready(self):
+        """Wait until the light is stable, then wait for fresh camera frames.
+
+        The camera save path writes the latest preview buffer.  If a frame was
+        exposed while the LED was still ramping, it can look yellow even though
+        later preview frames are normal, so the frame counter baseline is taken
+        only after the stabilization delay has passed.
+        """
+        self._sig_log.emit(
+            "等待灯光稳定 {:.1f}s，并丢弃前 {} 帧过渡画面...".format(
+                LIGHT_STABILIZE_SECS, FRESH_FRAME_MIN))
+        if not self._sleep_with_stop(LIGHT_STABILIZE_SECS):
+            return
+        self._wait_for_new_frame(min_frames=FRESH_FRAME_MIN, timeout=FRESH_FRAME_TIMEOUT)
+        self._sig_log.emit("灯光稳定，已获取稳定后的新帧")
 
     def _do_autofocus(self):
         """调用主窗口的自动对焦功能并等待完成。"""
@@ -483,14 +508,12 @@ class ProgrammableShootingDialog(QDialog):
             self._sig_log.emit("灯光已开启: 亮度={}".format(task["light"]))
             light_on_started = time.time()
 
-            # 3. 等待灯光物理稳定，同时确保相机采到了新参数下的新帧。
-            #    两个条件都满足才继续：① 经过 LIGHT_STABILIZE_SECS 秒
-            #                        ② 至少有 FRESH_FRAME_MIN 帧新图像到来
-            self._wait_for_new_frame(min_frames=FRESH_FRAME_MIN, timeout=FRESH_FRAME_TIMEOUT)
-            elapsed = time.time() - light_on_started
-            if elapsed < LIGHT_STABILIZE_SECS:
-                time.sleep(LIGHT_STABILIZE_SECS - elapsed)
-            self._sig_log.emit("灯光稳定，新帧已就绪")
+            # 3. 等待灯光稳定后再取新帧，避免保存 LED 刚亮时的过渡色帧。
+            self._wait_for_light_ready()
+            if self._stop_requested:
+                self._set_light(0)
+                self._sig_log.emit("灯光已关闭")
+                continue
 
             # 4. 自动对焦（如果需要）
             if task["auto_focus"]:
