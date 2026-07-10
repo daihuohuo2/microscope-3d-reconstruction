@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="全院共享超景深显微镜预约平台，支持预约申请、使用信息查询和本地访问统计。"
+    />
+    <title>超景深显微镜共享预约</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.34.1/dist/tabler-icons.min.css"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#booking" data-track="nav_brand">
+        <i class="ti ti-microscope" aria-hidden="true"></i>
+        <span>超景深显微镜共享预约</span>
+      </a>
+      <nav class="nav-links" aria-label="主导航">
+        <a class="is-active" href="#booking" data-track="nav_booking">预约</a>
+        <a href="#device" data-track="nav_device">设备信息</a>
+        <a href="#analytics" data-track="nav_analytics">统计</a>
+      </nav>
+      <a class="support-link" href="mailto:microscope@example.com" data-track="header_contact">
+        <i class="ti ti-help-circle" aria-hidden="true"></i>
+        <span>使用支持</span>
+      </a>
+    </header>
+
+    <main>
+      <section class="workspace" id="booking" aria-label="超景深显微镜预约工作台">
+        <aside class="booking-sidebar">
+          <div class="equipment-overview">
+            <p class="availability"><i class="ti ti-circle-check-filled" aria-hidden="true"></i> 设备可用</p>
+            <h1>超景深显微镜</h1>
+            <p class="equipment-location"><i class="ti ti-map-pin" aria-hidden="true"></i> 科研楼 A 区 3 楼 · A3-305</p>
+            <a class="detail-link" href="#device" data-track="equipment_detail">查看设备详情 <i class="ti ti-arrow-right" aria-hidden="true"></i></a>
+          </div>
+
+          <form class="booking-form" id="bookingForm">
+            <div class="form-heading">
+              <h2>提交预约</h2>
+              <p>请填写本次使用信息</p>
+            </div>
+            <div class="compact-grid">
+              <label>
+                <span>姓名</span>
+                <input name="name" autocomplete="name" required />
+              </label>
+              <label>
+                <span>联系方式</span>
+                <input name="contact" autocomplete="tel email" required />
+              </label>
+            </div>
+            <label>
+              <span>科室 / 课题组</span>
+              <input name="department" autocomplete="organization" required />
+            </label>
+            <label>
+              <span>预约日期</span>
+              <input name="date" type="date" required />
+            </label>
+            <div class="compact-grid">
+              <label>
+                <span>开始时间</span>
+                <select name="startTime" required>
+                  <option value="08:00">08:00</option>
+                  <option value="10:00">10:00</option>
+                  <option value="12:00">12:00</option>
+                  <option value="14:00">14:00</option>
+                  <option value="16:00">16:00</option>
+                </select>
+              </label>
+              <label>
+                <span>预计时长</span>
+                <select name="duration" required>
+                  <option value="1小时">1小时</option>
+                  <option value="2小时" selected>2小时</option>
+                  <option value="半天">半天</option>
+                  <option value="全天">全天</option>
+                </select>
+              </label>
+            </div>
+            <label>
+              <span>使用目的</span>
+              <select name="purpose" required>
+                <option value="观察拍照">观察拍照</option>
+                <option value="景深融合">景深融合</option>
+                <option value="三维重建">三维重建</option>
+                <option value="测量分析">测量分析</option>
+                <option value="培训演示">培训演示</option>
+              </select>
+            </label>
+            <label>
+              <span>样品类型 <em>选填</em></span>
+              <input name="sampleType" placeholder="如：组织切片、材料表面" />
+            </label>
+            <label>
+              <span>备注 <em>选填</em></span>
+              <textarea name="notes" rows="3" placeholder="样品数量、特殊光源、导出格式等"></textarea>
+            </label>
+            <label class="check">
+              <input name="agreement" type="checkbox" required />
+              <span>我已了解共享设备使用规范，并同意按预约时段使用。</span>
+            </label>
+            <div class="form-actions">
+              <button class="button primary" type="submit" data-track="booking_submit_click">提交预约</button>
+              <button class="button ghost" type="reset" data-track="booking_reset" aria-label="重置预约表单">
+                <i class="ti ti-refresh" aria-hidden="true"></i>
+              </button>
+            </div>
+            <p class="next-available"><i class="ti ti-clock" aria-hidden="true"></i> 下一个可预约时段：7 月 10 日 14:00</p>
+            <p class="form-status" id="formStatus" role="status" aria-live="polite"></p>
+          </form>
+        </aside>
+
+        <section class="schedule-panel" aria-labelledby="scheduleTitle">
+          <div class="schedule-toolbar">
+            <div>
+              <p class="eyebrow">共享设备日程</p>
+              <h2 id="scheduleTitle">本周排期</h2>
+            </div>
+            <div class="week-date">2026 年 7 月 6 日 - 7 月 12 日</div>
+          </div>
+
+          <div class="schedule-legend" aria-label="日程说明">
+            <span><i class="legend available" aria-hidden="true"></i> 可预约</span>
+            <span><i class="legend reserved" aria-hidden="true"></i> 已预约</span>
+            <span><i class="legend maintenance" aria-hidden="true"></i> 维护中</span>
+          </div>
+
+          <div class="calendar-scroll">
+            <div class="calendar-grid" aria-label="7 月 6 日至 12 日的超景深显微镜使用排期">
+              <div class="calendar-corner">时间</div>
+              <div class="day-heading">7/6 <small>周一</small></div>
+              <div class="day-heading">7/7 <small>周二</small></div>
+              <div class="day-heading">7/8 <small>周三</small></div>
+              <div class="day-heading">7/9 <small>周四</small></div>
+              <div class="day-heading today">7/10 <small>周五</small></div>
+              <div class="day-heading">7/11 <small>周六</small></div>
+              <div class="day-heading">7/12 <small>周日</small></div>
+
+              <div class="time-label row-1">08:00</div>
+              <div class="time-label row-2">10:00</div>
+              <div class="time-label row-3">12:00</div>
+              <div class="time-label row-4">14:00</div>
+              <div class="time-label row-5">16:00</div>
+
+              <div class="slot reserved day-1 row-1 span-2"><strong>已预约</strong><span>08:00 - 12:00</span></div>
+              <div class="slot reserved day-1 row-3 span-2"><strong>已预约</strong><span>12:00 - 16:00</span></div>
+              <div class="slot reserved day-2 row-2 span-2"><strong>已预约</strong><span>10:00 - 14:00</span></div>
+              <div class="slot maintenance day-2 row-4 span-2"><strong>维护中</strong><span>14:00 - 18:00</span></div>
+              <div class="slot reserved day-3 row-1"><strong>已预约</strong><span>08:00 - 10:00</span></div>
+              <div class="slot reserved day-3 row-3 span-2"><strong>已预约</strong><span>12:00 - 16:00</span></div>
+              <div class="slot reserved day-4 row-2 span-2"><strong>已预约</strong><span>10:00 - 14:00</span></div>
+              <div class="slot reserved day-4 row-4 span-2"><strong>已预约</strong><span>14:00 - 18:00</span></div>
+              <button class="slot available day-5 row-4" type="button" data-booking-slot data-date="2026-07-10" data-time="14:00">
+                <strong>可预约</strong><span>14:00 - 16:00</span>
+              </button>
+              <div class="slot reserved day-6 row-2 span-2"><strong>已预约</strong><span>10:00 - 14:00</span></div>
+              <div class="slot reserved day-6 row-4 span-2"><strong>已预约</strong><span>14:00 - 18:00</span></div>
+            </div>
+          </div>
+
+          <div class="schedule-callout">
+            <i class="ti ti-calendar-event" aria-hidden="true"></i>
+            <div><strong>已有空闲时段</strong><span>选择绿色时段后，预约表单会自动带入日期和开始时间。</span></div>
+          </div>
+        </section>
+      </section>
+
+      <section class="device-strip" id="device" aria-labelledby="deviceTitle">
+        <div class="strip-heading">
+          <p class="eyebrow">设备信息</p>
+          <h2 id="deviceTitle">支持科研样品的精细观察与分析</h2>
+        </div>
+        <div class="capability-list">
+          <div><i class="ti ti-zoom-in" aria-hidden="true"></i><span><strong>放大倍率</strong>2.5x - 100x</span></div>
+          <div><i class="ti ti-focus-2" aria-hidden="true"></i><span><strong>成像模式</strong>明场 / 透射光</span></div>
+          <div><i class="ti ti-stack-2" aria-hidden="true"></i><span><strong>Z 轴范围</strong>0 - 2 mm</span></div>
+          <div><i class="ti ti-ruler-measure" aria-hidden="true"></i><span><strong>输出格式</strong>TIFF / JPEG / OME-TIFF</span></div>
+        </div>
+        <div class="support-details">
+          <a href="mailto:microscope@example.com" data-track="contact_email"><i class="ti ti-mail" aria-hidden="true"></i> microscope@example.com</a>
+          <a href="tel:+8600000000000" data-track="contact_phone"><i class="ti ti-phone" aria-hidden="true"></i> 0000-00000000</a>
+          <span><i class="ti ti-clock-hour-4" aria-hidden="true"></i> 服务时间 08:30 - 17:30</span>
+        </div>
+      </section>
+
+      <section class="analytics-section" id="analytics">
+        <div class="analytics-heading">
+          <div>
+            <p class="eyebrow">管理统计</p>
+            <h2>访问与点击统计</h2>
+          </div>
+          <p>仅管理员可查看和导出本浏览器保存的数据。</p>
+        </div>
+        <div class="analytics-lock" id="analyticsLock">
+          <label>
+            <span>管理员口令</span>
+            <input id="analyticsPasscode" type="password" autocomplete="current-password" />
+          </label>
+          <button class="button secondary" id="unlockAnalytics" type="button" data-track="analytics_unlock">查看统计</button>
+        </div>
+
+        <div class="analytics-panel" id="analyticsPanel" hidden>
+          <div class="metrics">
+            <div><span class="metric-value" id="metricViews">0</span><span class="metric-label">浏览量</span></div>
+            <div><span class="metric-value" id="metricClicks">0</span><span class="metric-label">点击量</span></div>
+            <div><span class="metric-value" id="metricBookings">0</span><span class="metric-label">预约数</span></div>
+            <div><span class="metric-value" id="metricRate">0%</span><span class="metric-label">预约转化</span></div>
+          </div>
+          <div class="analytics-actions">
+            <button class="button secondary" id="exportStats" type="button" data-track="export_stats">导出统计</button>
+            <button class="button secondary" id="exportBookings" type="button" data-track="export_bookings">导出预约</button>
+            <button class="button danger" id="clearLocalData" type="button" data-track="clear_data">清空本地数据</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <caption>最近事件</caption>
+              <thead><tr><th>时间</th><th>类型</th><th>名称</th></tr></thead>
+              <tbody id="eventsTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>超景深显微镜共享平台</span>
+      <span>院内科研设备共享服务</span>
+    </footer>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>

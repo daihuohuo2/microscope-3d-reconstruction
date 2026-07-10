@@ -6,6 +6,16 @@
 
 一个基于焦点堆叠（Focus Stacking）和深度重建技术的显微成像三维重建系统。通过控制 Z 轴扫描和相机自动拍摄，生成深度图、点云数据和全焦合成图像。
 
+## 🌐 共享预约网页
+
+已新增 GitHub Pages 静态网页，位于 [`docs/`](docs/)。
+
+- 入口页面：[`docs/index.html`](docs/index.html)
+- 部署 workflow： [`.github/workflows/pages.yml`](.github/workflows/pages.yml)
+- 部署说明：[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
+
+网页支持超景深显微镜共享预约、访问量统计、点击统计、预约记录本地保存与 CSV 导出。
+
 ---
 
 ## 📋 目录
