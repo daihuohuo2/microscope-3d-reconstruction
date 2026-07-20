@@ -13,10 +13,10 @@ except ImportError:
     SERIAL_AVAILABLE = False
 
 try:
-    from sdk.CamOperation_class import CameraOperation
-    from sdk.MvCameraControl_class import MvCamera, _SDK_LOAD_ERROR as _MV_SDK_ERR
-    from sdk.MvErrorDefine_const import MV_OK
-    from sdk.CameraParams_header import (
+    from .sdk.CamOperation_class import CameraOperation
+    from .sdk.MvCameraControl_class import MvCamera, _SDK_LOAD_ERROR as _MV_SDK_ERR
+    from .sdk.MvErrorDefine_const import MV_OK
+    from .sdk.CameraParams_header import (
         MV_CC_DEVICE_INFO,
         MV_CC_DEVICE_INFO_LIST,
         MV_GENTL_CAMERALINK_DEVICE,

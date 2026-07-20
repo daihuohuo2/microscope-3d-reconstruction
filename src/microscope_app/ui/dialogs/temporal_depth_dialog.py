@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from algorithms import (
+from ...core.algorithms import (
     build_best_focus_maps,
     build_best_focus_color_maps,
     export_point_cloud,

@@ -2,7 +2,7 @@
 
 ## 文件位置
 
-网页位于 `docs/`：
+网页源码位于 `docs/website/`：
 
 - `index.html`：页面结构
 - `styles.css`：页面样式
@@ -15,13 +15,13 @@
 1. 打开仓库 `Settings`。
 2. 进入 `Pages`。
 3. 将 `Build and deployment` 的 `Source` 设为 `GitHub Actions`。
-4. 推送到 `main` 或 `master` 后会自动发布 `docs/` 目录。
+4. 推送到 `main` 或 `master` 后会自动发布 `docs/website/` 目录。
 
-也可以不使用 workflow，直接在 `Pages` 中选择 `Deploy from a branch`，分支选择 `main` 或 `master`，目录选择 `/docs`。
+当前网站位于嵌套目录，推荐保留现有 GitHub Actions 工作流；GitHub Pages 的分支直发模式不能直接选择 `/docs/website`。
 
 ## 需要替换的信息
 
-在 `docs/app.js` 中修改：
+在 `docs/website/app.js` 中修改：
 
 ```js
 const ADMIN_PASSCODE = "micro2026";
@@ -33,7 +33,7 @@ const REMOTE_EVENT_ENDPOINT = "";
 - `ADMIN_EMAIL`：预约提交后打开邮件草稿的收件邮箱。
 - `REMOTE_EVENT_ENDPOINT`：可选远程统计接口。留空时使用浏览器本地存储。
 
-在 `docs/index.html` 中同步替换页面展示的邮箱和电话。
+在 `docs/website/index.html` 中同步替换页面展示的邮箱和电话。
 
 ## 统计数据说明
 

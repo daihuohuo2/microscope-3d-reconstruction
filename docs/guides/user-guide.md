@@ -102,7 +102,7 @@ pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 python main.py
 ```
 
-首次运行后会在项目目录自动生成 `setting.ini`，保存串口号、保存路径、像素/mm 等设置，下次启动自动恢复。
+首次运行后会在 `runtime/settings.ini` 自动生成本机配置，保存串口号、保存路径、像素/mm 等设置，下次启动自动恢复。
 
 ---
 

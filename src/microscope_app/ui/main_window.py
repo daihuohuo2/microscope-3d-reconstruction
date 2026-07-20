@@ -6,8 +6,7 @@ from datetime import datetime
 from PyQt5.QtCore import QTimer, Qt, pyqtSignal
 from PyQt5.QtWidgets import QFileDialog, QMainWindow, QMessageBox
 
-from sdk.MvErrorDefine_const import MV_E_PARAMETER, MV_OK
-from algorithms import (
+from ..core.algorithms import (
     CALIB_DOT_SPACING_UM,
     compute_blob_scale_calibration,
     ensure_dir,
@@ -15,11 +14,19 @@ from algorithms import (
     save_autofocus_curve,
     save_autofocus_curve_csv,
 )
-from config_manager import ConfigManager
-from device_controller import DeviceController, SERIAL_AVAILABLE, to_hex_str
-from dialogs import PointCloudReconDialog, TemporalDepthDialog, OneClickDialog, ProgrammableShootingDialog, OfflineZStackDialog
-from overlays import DoubleClickFilter, ResizeFilter, ScaleBarOverlay
-from ui import Ui_MainWindow
+from ..core.config import ConfigManager
+from ..core.overlays import DoubleClickFilter, ResizeFilter, ScaleBarOverlay
+from ..hardware.controller import DeviceController, SERIAL_AVAILABLE, to_hex_str
+from ..hardware.sdk.MvErrorDefine_const import MV_E_PARAMETER, MV_OK
+from ..paths import PROJECT_ROOT, SETTINGS_FILE
+from .dialogs import (
+    OfflineZStackDialog,
+    OneClickDialog,
+    PointCloudReconDialog,
+    ProgrammableShootingDialog,
+    TemporalDepthDialog,
+)
+from .generated import Ui_MainWindow
 
 
 class MainWindow(QMainWindow):
@@ -48,8 +55,8 @@ class MainWindow(QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
-        self.script_dir = os.path.dirname(os.path.abspath(__file__))
-        self.settings_file = os.path.join(self.script_dir, "setting.ini")
+        self.script_dir = str(PROJECT_ROOT)
+        self.settings_file = str(SETTINGS_FILE)
         self.config_manager = ConfigManager(self.settings_file, self.script_dir)
         self.device_controller = DeviceController()
         self.device_controller.initialize_sdk()

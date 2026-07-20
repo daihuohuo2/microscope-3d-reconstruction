@@ -55,6 +55,8 @@ class ConfigManager:
         return self.config
 
     def save(self):
+        settings_dir = os.path.dirname(os.path.abspath(self.settings_file))
+        os.makedirs(settings_dir, exist_ok=True)
         parser = configparser.ConfigParser()
         parser["Settings"] = {"save_path": self.config.save_path}
         parser["Serial"] = {

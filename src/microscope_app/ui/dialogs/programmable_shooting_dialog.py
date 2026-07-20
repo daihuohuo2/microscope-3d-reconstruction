@@ -33,8 +33,8 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from algorithms import ensure_dir
-from sdk.MvErrorDefine_const import MV_OK
+from ...core.algorithms import ensure_dir
+from ...hardware.sdk.MvErrorDefine_const import MV_OK
 
 
 # ── 常量 ──

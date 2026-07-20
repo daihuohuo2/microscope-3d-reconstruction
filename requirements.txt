@@ -2,6 +2,7 @@
 PyQt5>=5.15.0
 numpy>=1.19.0
 matplotlib>=3.3.0
+scipy>=1.6.0
 
 # 串口通信（用于 Z 轴控制）
 pyserial>=3.5
