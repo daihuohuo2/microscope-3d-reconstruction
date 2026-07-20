@@ -8,17 +8,17 @@
 ## 目录
 
 1. [程序入口](#1-程序入口)
-2. [主窗口逻辑 main_window.py](#2-主窗口逻辑-main_windowpy)
-3. [主界面 UI 布局 ui/PyUICBasicDemo.py](#3-主界面-ui-布局-uipyuicbasicdemopy)
-4. [一键出图 dialogs/one_click_dialog.py](#4-一键出图-dialogsone_click_dialogpy)
-5. [点云重建 dialogs/recon_dialog.py](#5-点云重建-dialogsrecon_dialogpy)
-6. [连续扫描重建 dialogs/temporal_depth_dialog.py](#6-连续扫描重建-dialogstemporal_depth_dialogpy)
-7. [可编程拍摄 dialogs/programmable_shooting_dialog.py](#7-可编程拍摄-dialogsprogrammable_shooting_dialogpy)
-8. [核心算法 algorithms.py](#8-核心算法-algorithmspy)
-9. [设备控制 device_controller.py](#9-设备控制-device_controllerpy)
-10. [配置管理 config_manager.py](#10-配置管理-config_managerpy)
-11. [比例尺叠加层 overlays.py](#11-比例尺叠加层-overlayspy)
-12. [SDK 封装 sdk/](#12-sdk-封装-sdk)
+2. [主窗口逻辑](#2-主窗口逻辑-srcmicroscope_appuimain_windowpy)
+3. [主界面 UI 布局](#3-主界面-ui-布局-srcmicroscope_appuigeneratedpy)
+4. [一键出图](#4-一键出图-srcmicroscope_appuidialogsone_click_dialogpy)
+5. [点云重建](#5-点云重建-srcmicroscope_appuidialogsrecon_dialogpy)
+6. [连续扫描重建](#6-连续扫描重建-srcmicroscope_appuidialogstemporal_depth_dialogpy)
+7. [可编程拍摄](#7-可编程拍摄-srcmicroscope_appuidialogsprogrammable_shooting_dialogpy)
+8. [核心算法](#8-核心算法-srcmicroscope_appcorealgorithmspy)
+9. [设备控制](#9-设备控制-srcmicroscope_apphardwarecontrollerpy)
+10. [配置管理](#10-配置管理-srcmicroscope_appcoreconfigpy)
+11. [比例尺叠加层](#11-比例尺叠加层-srcmicroscope_appcoreoverlayspy)
+12. [SDK 封装](#12-sdk-封装-srcmicroscope_apphardwaresdk)
 
 ---
 
@@ -30,7 +30,7 @@
 
 ---
 
-## 2. 主窗口逻辑 `main_window.py`
+## 2. 主窗口逻辑 `src/microscope_app/ui/main_window.py`
 
 ### 2.1 类定义与初始化
 
@@ -90,7 +90,7 @@
 | 功能 | 行号 | 函数 |
 |------|------|------|
 | 加载配置文件 | `L119` | `load_settings` — 读取串口、波特率、像素/mm |
-| 保存配置文件 | `L141` | `save_settings` — 写入 setting.ini |
+| 保存配置文件 | `L141` | `save_settings` — 写入 `runtime/settings.ini` |
 
 ### 2.5 相机控制
 
@@ -158,8 +158,8 @@
 | 功能 | 行号 | 函数 |
 |------|------|------|
 | 启用/禁用 HDR | 绑定区 | `toggle_hdr` — 控制 `DeviceController.set_hdr_enabled()` |
-| 实时增强帧缓冲 | `sdk/CamOperation_class.py` | `_apply_hdr_locked` — 在显示前增强 Mono/Bayer/RGB 常见像素格式 |
-| 局部对比度算法 | `sdk/CamOperation_class.py` | `_hdr_enhance_u8` — 优先 CLAHE，缺少 OpenCV 时退回百分位拉伸 |
+| 实时增强帧缓冲 | `src/microscope_app/hardware/sdk/CamOperation_class.py` | `_apply_hdr_locked` — 在显示前增强 Mono/Bayer/RGB 常见像素格式 |
+| 局部对比度算法 | `src/microscope_app/hardware/sdk/CamOperation_class.py` | `_hdr_enhance_u8` — 优先 CLAHE，缺少 OpenCV 时退回百分位拉伸 |
 
 ### 2.11 自动对焦
 
@@ -172,7 +172,7 @@
 | 更新参数 UI | `L668` | `_af_update_param_ui` — 读取相机参数更新 3 个输入框 |
 | Z 轴移动（对焦内） | `L680` | `_af_move_z(step_mm)` — 相对移动并等待稳定 |
 | 三点二次拟合焦点 | `L686` | `_af_quadratic_peak` — 计算亚步长精确焦面位置 |
-| 中央/点击 ROI 锐度评分 | `main_window.py` | `_compute_sharpness` / `_af_atlas_score` — ATLAS Focus：有效纹理块筛选 + 多尺度 Tenengrad/Laplacian/Brenner 融合，屏蔽过曝区域 |
+| 中央/点击 ROI 锐度评分 | `src/microscope_app/ui/main_window.py` | `_compute_sharpness` / `_af_atlas_score` — ATLAS Focus：有效纹理块筛选 + 多尺度 Tenengrad/Laplacian/Brenner 融合，屏蔽过曝区域 |
 | 曝光统计（Otsu 分割） | `L577` | `_get_exposure_stats` — 区分主体/背景后测光 |
 | 图像亮度读取 | `L623` | `_get_image_brightness` — 中央 ROI p50 亮度 |
 | 中央 ROI 截取 | `L520` | `_get_center_roi(roi_fraction=0.55)` |
@@ -189,7 +189,7 @@
 
 ---
 
-## 3. 主界面 UI 布局 `ui/PyUICBasicDemo.py`
+## 3. 主界面 UI 布局 `src/microscope_app/ui/generated.py`
 
 ### 3.1 总体布局
 
@@ -220,7 +220,7 @@
 
 ---
 
-## 4. 一键出图 `dialogs/one_click_dialog.py`
+## 4. 一键出图 `src/microscope_app/ui/dialogs/one_click_dialog.py`
 
 ### 4.1 类与初始化
 
@@ -282,7 +282,7 @@
 
 ---
 
-## 5. 点云重建 `dialogs/recon_dialog.py`
+## 5. 点云重建 `src/microscope_app/ui/dialogs/recon_dialog.py`
 
 ### 5.1 类与初始化
 
@@ -323,7 +323,7 @@
 
 ---
 
-## 6. 连续扫描重建 `dialogs/temporal_depth_dialog.py`
+## 6. 连续扫描重建 `src/microscope_app/ui/dialogs/temporal_depth_dialog.py`
 
 ### 6.1 类与初始化
 
@@ -360,7 +360,7 @@
 
 ---
 
-## 7. 可编程拍摄 `dialogs/programmable_shooting_dialog.py`
+## 7. 可编程拍摄 `src/microscope_app/ui/dialogs/programmable_shooting_dialog.py`
 
 ### 7.1 模块级常量（行 `L44`）
 
@@ -400,7 +400,7 @@
 
 ---
 
-## 8. 核心算法 `algorithms.py`
+## 8. 核心算法 `src/microscope_app/core/algorithms.py`
 
 ### 8.1 锐度计算
 
@@ -475,7 +475,7 @@
 
 ---
 
-## 9. 设备控制 `device_controller.py`
+## 9. 设备控制 `src/microscope_app/hardware/controller.py`
 
 ### 9.1 类定义与初始化
 
@@ -525,20 +525,20 @@
 
 ---
 
-## 10. 配置管理 `config_manager.py`
+## 10. 配置管理 `src/microscope_app/core/config.py`
 
 | 内容 | 行号 | 说明 |
 |------|------|------|
 | `AppConfig` 数据类 | `L7` | 字段：`save_path`、`serial_port`、`baud_rate`（默认19200）、`serial_timeout`（默认1.0）、`pixels_per_mm`（默认100.0） |
 | 类定义 | `L14` | `class ConfigManager` |
-| 加载配置 | `L22` | `load()` — 读取 `setting.ini`，[Settings]/[Serial]/[Scale] 三个 section |
-| 保存配置 | `L37` | `save()` — 写入 `setting.ini` |
+| 加载配置 | `L22` | `load()` — 读取 `runtime/settings.ini`，[Settings]/[Serial]/[Scale] 三个 section |
+| 保存配置 | `L37` | `save()` — 写入 `runtime/settings.ini` |
 | 有效保存路径 | `L90` | `effective_save_path()` — 返回 save_path 或 default_dir |
-| 存储文件 | — | `setting.ini`（程序同目录） |
+| 存储文件 | — | `runtime/settings.ini`（运行时自动生成） |
 
 ---
 
-## 11. 比例尺叠加层 `overlays.py`
+## 11. 比例尺叠加层 `src/microscope_app/core/overlays.py`
 
 | 内容 | 行号 | 说明 |
 |------|------|------|
@@ -554,14 +554,14 @@
 
 ---
 
-## 12. SDK 封装 `sdk/`
+## 12. SDK 封装 `src/microscope_app/hardware/sdk/`
 
 | 文件 | 类/内容 | 说明 |
 |------|---------|------|
-| `sdk/MvCameraControl_class.py` | `class MvCamera` | 封装 MVS DLL 所有 C API（`MV_CC_Initialize`、`MV_CC_EnumDevices` 等） |
-| `sdk/CamOperation_class.py` | `class CameraOperation` | 高层相机操作（`Open_device`、`Start_grabbing`、`Get_frame_numpy`、`Get_frame_rgb_numpy`、`Save_Bmp_with_path` 等） |
-| `sdk/MvErrorDefine_const.py` | 常量 | `MV_OK = 0`、`MV_E_PARAMETER` 等错误码 |
-| `sdk/CameraParams_header.py` | ctypes 结构体 | `MV_CC_DEVICE_INFO`、`MV_CC_DEVICE_INFO_LIST`、`MV_GIGE_DEVICE`、`MV_USB_DEVICE` 等 |
+| `src/microscope_app/hardware/sdk/MvCameraControl_class.py` | `class MvCamera` | 封装 MVS DLL 所有 C API（`MV_CC_Initialize`、`MV_CC_EnumDevices` 等） |
+| `src/microscope_app/hardware/sdk/CamOperation_class.py` | `class CameraOperation` | 高层相机操作（`Open_device`、`Start_grabbing`、`Get_frame_numpy`、`Get_frame_rgb_numpy`、`Save_Bmp_with_path` 等） |
+| `src/microscope_app/hardware/sdk/MvErrorDefine_const.py` | 常量 | `MV_OK = 0`、`MV_E_PARAMETER` 等错误码 |
+| `src/microscope_app/hardware/sdk/CameraParams_header.py` | ctypes 结构体 | `MV_CC_DEVICE_INFO`、`MV_CC_DEVICE_INFO_LIST`、`MV_GIGE_DEVICE`、`MV_USB_DEVICE` 等 |
 
 ---
 
@@ -584,7 +584,7 @@
 比例尺标定
   ├─ DeviceController.get_gray_frame()         # 取当前帧
   ├─ algorithms.compute_blob_scale_calibration()  # blob检测+间距计算
-  └─ ConfigManager.save()                      # 写入setting.ini
+  └─ ConfigManager.save()                      # 写入 runtime/settings.ini
 ```
 
 ## 附录 B：文件行数速查
@@ -592,13 +592,13 @@
 | 文件 | 估计总行数 | 核心内容 |
 |------|-----------|---------|
 | `main.py` | ~10 | 程序入口 |
-| `main_window.py` | ~850 | 主窗口全部逻辑 |
-| `ui/PyUICBasicDemo.py` | ~380 | 主界面 UI 定义 |
-| `algorithms.py` | ~1100 | 所有图像处理和算法 |
-| `device_controller.py` | ~400 | 相机+串口控制 |
-| `config_manager.py` | ~95 | INI 读写 |
-| `overlays.py` | ~145 | 比例尺叠加层 |
-| `dialogs/one_click_dialog.py` | ~600 | 一键出图对话框 |
-| `dialogs/recon_dialog.py` | ~500 | 点云重建对话框 |
-| `dialogs/temporal_depth_dialog.py` | ~550 | 连续扫描重建对话框 |
-| `dialogs/programmable_shooting_dialog.py` | ~450 | 可编程拍摄对话框 |
+| `src/microscope_app/ui/main_window.py` | ~850 | 主窗口全部逻辑 |
+| `src/microscope_app/ui/generated.py` | ~380 | 主界面 UI 定义 |
+| `src/microscope_app/core/algorithms.py` | ~1100 | 所有图像处理和算法 |
+| `src/microscope_app/hardware/controller.py` | ~400 | 相机+串口控制 |
+| `src/microscope_app/core/config.py` | ~95 | INI 读写 |
+| `src/microscope_app/core/overlays.py` | ~145 | 比例尺叠加层 |
+| `src/microscope_app/ui/dialogs/one_click_dialog.py` | ~600 | 一键出图对话框 |
+| `src/microscope_app/ui/dialogs/recon_dialog.py` | ~500 | 点云重建对话框 |
+| `src/microscope_app/ui/dialogs/temporal_depth_dialog.py` | ~550 | 连续扫描重建对话框 |
+| `src/microscope_app/ui/dialogs/programmable_shooting_dialog.py` | ~450 | 可编程拍摄对话框 |

@@ -29,10 +29,11 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from zstack_3d.io_utils import load_zstack_from_path
-from zstack_3d.pointcloud import create_point_cloud_from_depth
-from zstack_3d.reconstruction import ReconstructionConfig, reconstruct_from_stack
-from zstack_3d.visualization import save_reconstruction_outputs
+from ...paths import ENTRY_POINT
+from ...reconstruction.io_utils import load_zstack_from_path
+from ...reconstruction.pointcloud import create_point_cloud_from_depth
+from ...reconstruction.reconstruction import ReconstructionConfig, reconstruct_from_stack
+from ...reconstruction.visualization import save_reconstruction_outputs
 
 
 def _rgb_to_pixmap(image: np.ndarray) -> QPixmap:
@@ -372,9 +373,8 @@ class OfflineZStackDialog(QDialog):
         if not self._last_manifest or not os.path.exists(self._last_manifest):
             QMessageBox.information(self, "提示", "请先完成一次重建", QMessageBox.Ok)
             return
-        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "zstack_measure.py")
         try:
-            subprocess.Popen([sys.executable, script_path, "measure", "--manifest", self._last_manifest])
+            subprocess.Popen([sys.executable, str(ENTRY_POINT), "measure", "--manifest", self._last_manifest])
             self._append_log("已打开测量窗口")
         except Exception as exc:
             QMessageBox.warning(self, "打开失败", str(exc), QMessageBox.Ok)

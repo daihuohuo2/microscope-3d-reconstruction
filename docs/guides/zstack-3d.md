@@ -16,13 +16,13 @@ Main capabilities:
 
 The code is organized as:
 
-- `zstack_3d/io_utils.py`: stack discovery, image loading, alignment
-- `zstack_3d/focus.py`: focus metrics
-- `zstack_3d/reconstruction.py`: depth reconstruction
-- `zstack_3d/pointcloud.py`: point cloud generation/export
-- `zstack_3d/measurement.py`: programmatic and interactive measurements
-- `zstack_3d/automation.py`: capture + reconstruct automation scaffold
-- `zstack_3d/cli.py`: command line entry
+- `src/microscope_app/reconstruction/io_utils.py`: stack discovery, image loading, alignment
+- `src/microscope_app/reconstruction/focus.py`: focus metrics
+- `src/microscope_app/reconstruction/reconstruction.py`: depth reconstruction
+- `src/microscope_app/reconstruction/pointcloud.py`: point cloud generation/export
+- `src/microscope_app/reconstruction/measurement.py`: programmatic and interactive measurements
+- `src/microscope_app/reconstruction/automation.py`: capture + reconstruct automation scaffold
+- `src/microscope_app/reconstruction/cli.py`: command line implementation
 
 ## 2. Installation
 
@@ -74,7 +74,7 @@ Use `--filename-z-unit mm`.
 ### Example A: file names contain only Z indices
 
 ```bash
-python zstack_reconstruct.py reconstruct ^
+python main.py reconstruct ^
   --input "D:\data\stack_01" ^
   --output "D:\data\stack_01_out" ^
   --filename-z-unit index ^
@@ -88,7 +88,7 @@ python zstack_reconstruct.py reconstruct ^
 ### Example B: file names contain real Z heights in millimeters
 
 ```bash
-python zstack_reconstruct.py reconstruct ^
+python main.py reconstruct ^
   --input "D:\data\stack_mm" ^
   --output "D:\data\stack_mm_out" ^
   --filename-z-unit mm ^
@@ -150,7 +150,7 @@ The output directory will contain:
 Open the saved reconstruction for measurement:
 
 ```bash
-python zstack_measure.py measure --manifest "D:\data\stack_01_out\manifest.json"
+python main.py measure --manifest "D:\data\stack_01_out\manifest.json"
 ```
 
 Shortcuts inside the measurement window:
@@ -167,7 +167,7 @@ Shortcuts inside the measurement window:
 Two-point height difference:
 
 ```bash
-python zstack_measure.py measure ^
+python main.py measure ^
   --manifest "D:\data\stack_01_out\manifest.json" ^
   --point-pair 120 80 240 160
 ```
@@ -175,7 +175,7 @@ python zstack_measure.py measure ^
 Line profile:
 
 ```bash
-python zstack_measure.py measure ^
+python main.py measure ^
   --manifest "D:\data\stack_01_out\manifest.json" ^
   --line 120 80 240 160
 ```
@@ -183,7 +183,7 @@ python zstack_measure.py measure ^
 Rectangle region:
 
 ```bash
-python zstack_measure.py measure ^
+python main.py measure ^
   --manifest "D:\data\stack_01_out\manifest.json" ^
   --rect 100 60 260 220
 ```
@@ -211,7 +211,7 @@ The exported point cloud coordinates are in millimeters, so the Z values can be 
 
 ## 8. Full automation with your microscope API
 
-The file `zstack_3d/automation.py` already includes `DeviceControllerStackAcquirer`, which can wrap your current project’s `DeviceController`.
+The file `src/microscope_app/reconstruction/automation.py` includes `DeviceControllerStackAcquirer`, which can wrap the current `DeviceController`.
 
 Typical workflow:
 
@@ -225,13 +225,13 @@ Typical workflow:
 Example:
 
 ```python
-from device_controller import DeviceController
-from zstack_3d.automation import (
+from microscope_app.hardware.controller import DeviceController
+from microscope_app.reconstruction.automation import (
     AcquisitionConfig,
     DeviceControllerStackAcquirer,
     run_acquisition_and_reconstruction,
 )
-from zstack_3d.reconstruction import ReconstructionConfig
+from microscope_app.reconstruction.reconstruction import ReconstructionConfig
 
 controller = DeviceController()
 # controller.initialize_sdk()

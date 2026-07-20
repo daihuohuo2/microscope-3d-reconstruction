@@ -8,11 +8,11 @@
 
 ## 🌐 共享预约网页
 
-已新增 GitHub Pages 静态网页，位于 [`docs/`](docs/)。
+GitHub Pages 静态网页源码位于 [`docs/website/`](docs/website/)，项目文档从 [`docs/README.md`](docs/README.md) 统一进入。
 
-- 入口页面：[`docs/index.html`](docs/index.html)
+- 入口页面：[`docs/website/index.html`](docs/website/index.html)
 - 部署 workflow： [`.github/workflows/pages.yml`](.github/workflows/pages.yml)
-- 部署说明：[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
+- 部署说明：[`docs/deployment/github-pages.md`](docs/deployment/github-pages.md)
 
 网页支持超景深显微镜共享预约、访问量统计、点击统计、预约记录本地保存与 CSV 导出。
 
@@ -155,7 +155,7 @@ pip install -r requirements.txt
 ### 3. 安装相机 SDK
 根据你的相机型号，安装对应的 SDK 驱动：
 - 海康威视工业相机：安装 MVS SDK
-- 其他品牌：将 SDK 的 Python 接口放置到 `sdk/` 目录
+- 其他品牌：在 `src/microscope_app/hardware/sdk/` 中适配相机接口
 
 ### 4. 配置串口（可选）
 如果需要控制 Z 轴运动平台，安装 pySerial：
@@ -170,6 +170,14 @@ pip install pyserial
 ### 启动程序
 ```bash
 python main.py
+```
+
+项目仅保留这一个启动入口。离线重建、测量和独立 Z-stack 界面通过子命令使用：
+
+```bash
+python main.py zstack-gui
+python main.py reconstruct --help
+python main.py measure --help
 ```
 
 ### 主界面布局
@@ -234,29 +242,19 @@ CSV 示例：
 
 ```
 .
-├── main.py                    # 程序入口
-├── main_window.py             # 主窗口逻辑
-├── device_controller.py       # 设备控制（相机 + 串口）
-├── algorithms.py              # 核心算法（DFF、点云生成等）
-├── config_manager.py          # 配置文件管理
-├── overlays.py                # 界面叠加层（比例尺等）
-├── setting.ini                # 配置文件
-│
-├── dialogs/                   # 功能对话框
-│   ├── __init__.py
-│   ├── recon_dialog.py        # 点云重建对话框
-│   ├── temporal_depth_dialog.py   # 时间换位深度对话框
-│   ├── one_click_dialog.py    # 一键出图对话框
-│   └── programmable_shooting_dialog.py  # 可编程拍摄对话框
-│
-├── sdk/                       # 相机 SDK 接口
-│   ├── CamOperation_class.py
-│   ├── MvCameraControl_class.py
-│   ├── MvErrorDefine_const.py
-│   └── CameraParams_header.py
-│
-└── ui/                        # UI 界面文件
-    └── PyUICBasicDemo.py
+├── main.py                    # 唯一启动入口
+├── src/microscope_app/
+│   ├── application.py         # Qt 应用生命周期
+│   ├── paths.py               # 项目与运行时路径
+│   ├── core/                  # DFF 算法、配置、叠加层
+│   ├── hardware/              # 相机、串口及厂商 SDK
+│   ├── ui/                    # 主窗口、生成界面、功能对话框
+│   └── reconstruction/        # Z-stack 重建、点云、测量与 CLI
+├── tests/                     # 自动化测试
+├── assets/                    # 静态资源
+├── docs/                      # 分类文档与独立网站源码
+├── requirements.txt           # Python 依赖
+└── runtime/                   # 自动生成的本机配置（不入库）
 ```
 
 ---
@@ -303,7 +301,7 @@ pip install -r requirements.txt
 
 ### Q4: 支持哪些相机品牌？
 **A**:
-当前主要支持海康威视工业相机（MVS SDK）。控制链路采用通用串口 G-code，默认波特率为 19200；其他品牌相机需要适配 `sdk/` 目录下的接口代码。
+当前主要支持海康威视工业相机（MVS SDK）。控制链路采用通用串口 G-code，默认波特率为 19200；其他品牌相机需要适配 `src/microscope_app/hardware/sdk/` 下的接口代码。
 
 ### Q5: 输出的 .ply 文件如何查看？
 **A**:

@@ -33,14 +33,21 @@ env/
 *~
 
 # 配置文件（包含用户特定设置）
+runtime/
 setting.ini
 *.ini
 
 # 输出文件
 output/
+generated_pointclouds/
+*_recon/
+tmp/
+docx_output/
+scale_bar_work/
 *.bmp
 *.ply
 *.csv
+*.log
 run_log.txt
 
 # 操作系统

@@ -90,6 +90,188 @@ def compute_laplacian_sharpness_map(gray, window_size=9):
     return _box_mean(sharp, window_size)
 
 
+def compute_robust_focus_map(gray, window_size=11):
+    """Return a noise-resistant local focus score for DFF reconstruction.
+
+    A Laplacian-only score reacts strongly to sensor noise and specular pixels.
+    This metric combines a lightly denoised Tenengrad response with Laplacian
+    energy.  The scale is intentionally kept constant between frames so the
+    peak along Z remains meaningful.
+    """
+    import numpy as np
+
+    image = np.asarray(gray, dtype=np.float32)
+    try:
+        import cv2
+
+        smooth = cv2.GaussianBlur(image, (0, 0), 0.65, borderType=cv2.BORDER_REFLECT101)
+        gx = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=3)
+        gy = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=3)
+        lap = cv2.Laplacian(smooth, cv2.CV_32F, ksize=3)
+    except Exception:
+        smooth = image
+        gx = np.zeros_like(smooth, dtype=np.float32)
+        gy = np.zeros_like(smooth, dtype=np.float32)
+        lap = np.zeros_like(smooth, dtype=np.float32)
+        gx[:, 1:-1] = (smooth[:, 2:] - smooth[:, :-2]) * 0.5
+        gy[1:-1, :] = (smooth[2:, :] - smooth[:-2, :]) * 0.5
+        lap[1:-1, 1:-1] = (
+            smooth[:-2, 1:-1]
+            + smooth[2:, 1:-1]
+            + smooth[1:-1, :-2]
+            + smooth[1:-1, 2:]
+            - 4.0 * smooth[1:-1, 1:-1]
+        )
+
+    tenengrad = _box_mean(gx * gx + gy * gy, window_size)
+    laplacian = _box_mean(lap * lap, window_size)
+    # Sobel energy is the stable base; Laplacian energy sharpens the Z peak.
+    score = tenengrad + 2.5 * laplacian
+    return np.nan_to_num(score, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
+
+
+class StreamingDFFAccumulator:
+    """Memory-bounded DFF estimator with confidence and sub-step refinement."""
+
+    def __init__(self, image_shape, color_enabled=True, focus_window_size=11):
+        import numpy as np
+
+        self.image_shape = tuple(int(value) for value in image_shape)
+        self.color_enabled = bool(color_enabled)
+        self.focus_window_size = int(max(3, focus_window_size)) | 1
+        self.frame_count = 0
+        self.z_positions = []
+        self.best_score = None
+        self.second_score = None
+        self.best_index = None
+        self.best_z = None
+        self.best_prev_score = None
+        self.best_next_score = None
+        self.previous_score = None
+        self.best_gray = None
+        self.best_color = None
+        self._np = np
+
+    def update(self, gray, z_position, color=None):
+        """Add one aligned Z slice and update the per-pixel focus peak."""
+        np = self._np
+        frame = np.asarray(gray, dtype=np.float32)
+        if frame.shape != self.image_shape:
+            raise ValueError("DFF frame shape mismatch: {} != {}".format(frame.shape, self.image_shape))
+
+        score = compute_robust_focus_map(frame, self.focus_window_size)
+        index = self.frame_count
+        self.z_positions.append(float(z_position))
+
+        color_u8 = None
+        if color is not None:
+            candidate = np.asarray(color)
+            if candidate.ndim == 3 and candidate.shape[:2] == self.image_shape:
+                color_u8 = np.clip(candidate[:, :, :3], 0, 255).astype(np.uint8)
+
+        if self.best_score is None:
+            self.best_score = score.copy()
+            self.second_score = np.zeros(self.image_shape, dtype=np.float32)
+            self.best_index = np.zeros(self.image_shape, dtype=np.int16)
+            self.best_z = np.full(self.image_shape, float(z_position), dtype=np.float32)
+            self.best_prev_score = np.full(self.image_shape, np.nan, dtype=np.float32)
+            self.best_next_score = np.full(self.image_shape, np.nan, dtype=np.float32)
+            self.best_gray = frame.copy()
+            self.best_color = color_u8.copy() if color_u8 is not None else None
+        else:
+            # The current frame is the right neighbour of a peak selected on
+            # the immediately preceding slice.
+            needs_right = (self.best_index == index - 1) & ~np.isfinite(self.best_next_score)
+            self.best_next_score[needs_right] = score[needs_right]
+
+            new_best = score > self.best_score
+            not_best = ~new_best
+            self.second_score[not_best] = np.maximum(self.second_score[not_best], score[not_best])
+            self.second_score[new_best] = self.best_score[new_best]
+
+            self.best_score[new_best] = score[new_best]
+            self.best_index[new_best] = index
+            self.best_z[new_best] = float(z_position)
+            self.best_prev_score[new_best] = self.previous_score[new_best]
+            self.best_next_score[new_best] = np.nan
+            self.best_gray[new_best] = frame[new_best]
+            if color_u8 is not None:
+                if self.best_color is None:
+                    self.best_color = color_u8.copy()
+                else:
+                    self.best_color[new_best] = color_u8[new_best]
+
+        self.previous_score = score
+        self.frame_count += 1
+        return score
+
+    def finalize(self):
+        """Return continuous depth, texture, focus score and confidence maps."""
+        np = self._np
+        if self.best_score is None or self.frame_count < 2:
+            raise ValueError("At least two DFF frames are required")
+
+        z_values = np.asarray(self.z_positions, dtype=np.float32)
+        depth = self.best_z.astype(np.float32).copy()
+        prev_score = self.best_prev_score
+        next_score = self.best_next_score
+        center_score = self.best_score
+        interior = (
+            (self.best_index > 0)
+            & (self.best_index < self.frame_count - 1)
+            & np.isfinite(prev_score)
+            & np.isfinite(next_score)
+        )
+
+        rows, cols = np.where(interior)
+        if rows.size:
+            center_index = self.best_index[rows, cols].astype(np.int32)
+            s_prev = prev_score[rows, cols]
+            s_center = center_score[rows, cols]
+            s_next = next_score[rows, cols]
+            denominator = s_prev + s_next - 2.0 * s_center
+            concave = denominator < -np.maximum(1e-6, np.abs(s_center) * 1e-5)
+            safe_denominator = np.where(concave, denominator, -1.0)
+            half_span = (z_values[center_index + 1] - z_values[center_index - 1]) * 0.5
+            offset = (s_prev - s_next) / (2.0 * safe_denominator) * half_span
+            max_offset = np.minimum(
+                np.abs(z_values[center_index] - z_values[center_index - 1]),
+                np.abs(z_values[center_index + 1] - z_values[center_index]),
+            )
+            offset = np.where(concave, np.clip(offset, -max_offset, max_offset), 0.0)
+            depth[rows, cols] = z_values[center_index] + offset.astype(np.float32)
+
+        score_scale = np.maximum(np.abs(center_score), 1e-6)
+        dominance = np.clip((center_score - self.second_score) / score_scale, 0.0, 1.0)
+        curvature = np.zeros(self.image_shape, dtype=np.float32)
+        curvature[interior] = np.clip(
+            (2.0 * center_score[interior] - prev_score[interior] - next_score[interior])
+            / score_scale[interior],
+            0.0,
+            1.0,
+        )
+        confidence = (
+            0.65 * np.clip(dominance * 5.0, 0.0, 1.0)
+            + 0.35 * np.clip(curvature * 3.0, 0.0, 1.0)
+        ).astype(np.float32)
+        boundary = (self.best_index == 0) | (self.best_index == self.frame_count - 1)
+        confidence[boundary] *= 0.20
+
+        color = self.best_color
+        if color is None:
+            gray_u8 = _normalize_to_uint8(self.best_gray)
+            color = np.repeat(gray_u8[:, :, None], 3, axis=2)
+
+        return {
+            "depth_map": depth,
+            "sharp_map": center_score.astype(np.float32),
+            "confidence_map": confidence,
+            "focus_index_map": self.best_index.copy(),
+            "intensity_map": self.best_gray.astype(np.float32),
+            "color_map": color.astype(np.uint8),
+        }
+
+
 def phase_correlation_shift(frame1, frame2):
     import numpy as np
 
@@ -120,6 +302,90 @@ def phase_correlation_shift(frame1, frame2):
         return float(dx), float(dy)
     except Exception:
         return 0.0, 0.0
+
+
+def estimate_translation_shift(reference_gray, moving_gray, max_width=768, max_shift_px=40.0):
+    """Estimate the full-resolution translation that aligns moving to reference."""
+    import numpy as np
+
+    reference = np.asarray(reference_gray, dtype=np.float32)
+    moving = np.asarray(moving_gray, dtype=np.float32)
+    if reference.shape != moving.shape or reference.ndim != 2:
+        return 0.0, 0.0
+
+    height, width = reference.shape
+    scale = min(1.0, float(max_width) / max(float(width), 1.0))
+    if scale < 1.0:
+        try:
+            import cv2
+
+            size = (max(32, int(round(width * scale))), max(32, int(round(height * scale))))
+            reference_small = cv2.resize(reference, size, interpolation=cv2.INTER_AREA)
+            moving_small = cv2.resize(moving, size, interpolation=cv2.INTER_AREA)
+        except Exception:
+            stride = max(1, int(round(1.0 / scale)))
+            reference_small = reference[::stride, ::stride]
+            moving_small = moving[::stride, ::stride]
+            scale = 1.0 / float(stride)
+    else:
+        reference_small = reference
+        moving_small = moving
+
+    # Remove slow illumination gradients that otherwise dominate correlation.
+    try:
+        import cv2
+
+        reference_small = reference_small - cv2.GaussianBlur(reference_small, (0, 0), 8.0)
+        moving_small = moving_small - cv2.GaussianBlur(moving_small, (0, 0), 8.0)
+    except Exception:
+        reference_small = reference_small - float(np.mean(reference_small))
+        moving_small = moving_small - float(np.mean(moving_small))
+
+    dx_small, dy_small = phase_correlation_shift(reference_small, moving_small)
+    dx = float(dx_small) / max(scale, 1e-6)
+    dy = float(dy_small) / max(scale, 1e-6)
+    if not np.isfinite(dx) or not np.isfinite(dy):
+        return 0.0, 0.0
+    if abs(dx) > float(max_shift_px) or abs(dy) > float(max_shift_px):
+        return 0.0, 0.0
+    return dx, dy
+
+
+def warp_frame_translation(gray, color, dx, dy):
+    """Translate one grayscale/RGB frame using reflected borders."""
+    import numpy as np
+
+    gray_arr = np.asarray(gray)
+    try:
+        import cv2
+
+        height, width = gray_arr.shape[:2]
+        matrix = np.array([[1.0, 0.0, float(dx)], [0.0, 1.0, float(dy)]], dtype=np.float32)
+        aligned_gray = cv2.warpAffine(
+            gray_arr,
+            matrix,
+            (width, height),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_REFLECT101,
+        )
+        aligned_color = None
+        if color is not None:
+            aligned_color = cv2.warpAffine(
+                np.asarray(color),
+                matrix,
+                (width, height),
+                flags=cv2.INTER_LINEAR,
+                borderMode=cv2.BORDER_REFLECT101,
+            )
+        return aligned_gray, aligned_color
+    except Exception:
+        x_shift = int(round(float(dx)))
+        y_shift = int(round(float(dy)))
+        aligned_gray = np.roll(np.roll(gray_arr, y_shift, axis=0), x_shift, axis=1)
+        aligned_color = None
+        if color is not None:
+            aligned_color = np.roll(np.roll(np.asarray(color), y_shift, axis=0), x_shift, axis=1)
+        return aligned_gray, aligned_color
 
 
 def _parabolic_peak_offset(left, center, right):
@@ -573,90 +839,227 @@ def select_focus_window(z_list, frames_gray, fine_pct):
     return z0, z1
 
 
-def point_cloud_from_depth(depth_map, sharp_map, intensity_map, pixels_per_mm, min_sharp, z_scale):
+def prepare_depth_surface(
+    depth_map,
+    sharp_map,
+    intensity_map,
+    min_sharp=5.0,
+    confidence_map=None,
+    z_step=None,
+):
+    """Clean a DFF depth map while retaining real height discontinuities.
+
+    Low-confidence pixels are repaired from their neighbourhood; confident
+    measurements are only lightly smoothed with a depth-domain bilateral
+    filter.  The returned mask represents the visible 2.5D object surface.
+    """
     import numpy as np
 
-    h, w = depth_map.shape
-    ppmm = pixels_per_mm if pixels_per_mm > 0 else 1.0
+    depth = np.asarray(depth_map, dtype=np.float32)
+    sharp = np.asarray(sharp_map, dtype=np.float32)
+    intensity = np.asarray(intensity_map, dtype=np.float32)
+    if depth.ndim != 2 or sharp.shape != depth.shape or intensity.shape != depth.shape:
+        raise ValueError("depth, sharpness and intensity maps must have the same 2D shape")
 
-    # min_sharp 语义：
-    #   0        → 不过滤（保留全部）
-    #   (0, 100] → 相对阈值：保留锐度 ≥ 全图峰值 × (min_sharp/100) 的像素
-    #   > 100    → 绝对值（兼容旧配置）
+    finite = np.isfinite(depth) & np.isfinite(sharp)
+    finite_sharp = sharp[finite]
     ms = float(min_sharp)
     if ms <= 0.0:
-        actual_thresh = 0.0
+        sharp_threshold = 0.0
     elif ms <= 100.0:
-        finite_sharp = sharp_map[np.isfinite(sharp_map)]
         peak = float(np.percentile(finite_sharp, 99.5)) if finite_sharp.size else 0.0
-        actual_thresh = peak * (ms / 100.0) if peak > 0.0 else 0.0
+        sharp_threshold = peak * (ms / 100.0)
     else:
-        actual_thresh = ms
+        sharp_threshold = ms
 
-    valid = (sharp_map > actual_thresh) & np.isfinite(depth_map)
+    foreground = _foreground_mask_from_intensity(intensity)
+    if foreground is None or foreground.shape != depth.shape:
+        foreground = np.ones(depth.shape, dtype=bool)
+    signal_mask = finite & foreground & (sharp > sharp_threshold)
 
-    # ── 连通性过滤：去除完全孤立的单像素噪点（至少 1 个有效邻居） ──
-    valid_f = valid.astype(np.float32)
-    pad = np.pad(valid_f, 1, mode='constant')
-    neighbor_sum = (
-        pad[:-2, :-2] + pad[:-2, 1:-1] + pad[:-2, 2:] +
-        pad[1:-1, :-2]                  + pad[1:-1, 2:] +
-        pad[2:,  :-2]  + pad[2:,  1:-1] + pad[2:,  2:]
+    if confidence_map is None:
+        confidence = np.ones(depth.shape, dtype=np.float32)
+    else:
+        confidence = np.nan_to_num(
+            np.asarray(confidence_map, dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0
+        )
+        if confidence.shape != depth.shape:
+            raise ValueError("confidence_map must match depth_map")
+        confidence = np.clip(confidence, 0.0, 1.0)
+
+    confident_values = confidence[signal_mask]
+    if confident_values.size:
+        # Keep most of the measured surface, but do not let ambiguous focus
+        # pixels dictate geometry merely to maximise point count.
+        adaptive_conf = float(np.percentile(confident_values, 12.0))
+        confidence_threshold = min(0.18, max(0.025, adaptive_conf))
+    else:
+        confidence_threshold = 0.0
+    anchor_mask = signal_mask & (confidence >= confidence_threshold)
+    if float(np.mean(anchor_mask)) < 0.01:
+        anchor_mask = signal_mask.copy()
+
+    surface_mask = _cleanup_surface_mask(signal_mask, foreground)
+    filled = _nearest_fill_depth(depth, anchor_mask)
+
+    step = abs(float(z_step)) if z_step is not None else 0.0
+    valid_depth = filled[surface_mask & np.isfinite(filled)]
+    depth_span = (
+        float(np.percentile(valid_depth, 95.0) - np.percentile(valid_depth, 5.0))
+        if valid_depth.size
+        else 0.0
     )
-    valid = valid & (neighbor_sum >= 3)   # 至少 3 个有效邻居，避免竖刺噪点
-
-    # ── 深度图中值滤波：消除单像素深度跳变 ──
-    depth_use = depth_map
     try:
-        from scipy.ndimage import median_filter as _mf
-        depth_use = _mf(depth_map.astype(np.float32), size=7)
-        local = _mf(depth_use, size=17)
-        residual = np.abs(depth_use - local)
-        valid_res = residual[valid & np.isfinite(residual)]
-        if valid_res.size:
-            tol = max(0.025, float(np.percentile(valid_res, 90.0)) * 1.8)
-            valid = valid & (residual <= tol)
+        import cv2
+
+        local = cv2.medianBlur(filled.astype(np.float32), 7)
+        coarse = cv2.medianBlur(local.astype(np.float32), 13)
+        residual = np.abs(filled - local)
+        residual_valid = residual[anchor_mask & np.isfinite(residual)]
+        residual_limit = max(
+            step * 1.75,
+            depth_span * 0.015,
+            float(np.percentile(residual_valid, 92.0)) * 1.25 if residual_valid.size else 0.0,
+            0.003,
+        )
+        despiked = np.where(residual > residual_limit, local, filled).astype(np.float32)
+        low_confidence = confidence < max(confidence_threshold * 1.8, 0.08)
+        despiked = np.where(low_confidence, coarse, despiked).astype(np.float32)
+        sigma_color = max(step * 3.0, depth_span * 0.040, 0.010)
+        smooth = cv2.bilateralFilter(
+            despiked, d=13, sigmaColor=float(sigma_color), sigmaSpace=7.0,
+            borderType=cv2.BORDER_REFLECT101,
+        )
     except Exception:
         try:
-            import cv2
-            depth_use = cv2.medianBlur(depth_map.astype(np.float32), 7)
-            local = cv2.medianBlur(depth_use, 17)
-            residual = np.abs(depth_use - local)
-            valid_res = residual[valid & np.isfinite(residual)]
-            if valid_res.size:
-                tol = max(0.025, float(np.percentile(valid_res, 90.0)) * 1.8)
-                valid = valid & (residual <= tol)
+            from scipy.ndimage import median_filter
+
+            local = median_filter(filled, size=7, mode="nearest")
+            coarse = median_filter(local, size=13, mode="nearest")
+            residual = np.abs(filled - local)
+            residual_valid = residual[anchor_mask & np.isfinite(residual)]
+            residual_limit = max(
+                step * 1.75,
+                depth_span * 0.015,
+                float(np.percentile(residual_valid, 92.0)) * 1.25 if residual_valid.size else 0.0,
+                0.003,
+            )
+            despiked = np.where(residual > residual_limit, local, filled)
+            low_confidence = confidence < max(confidence_threshold * 1.8, 0.08)
+            smooth = np.where(low_confidence, coarse, despiked).astype(np.float32)
         except Exception:
-            pass
+            smooth = filled.astype(np.float32)
 
-    ys, xs = np.where(valid)
-    if len(xs) == 0:
+    # High-confidence peaks preserve fine relief; uncertain pixels follow the
+    # regularised surface to suppress vertical needles and terracing.
+    retain = np.clip((confidence - confidence_threshold) / max(1.0 - confidence_threshold, 1e-6), 0.0, 1.0)
+    retain = 0.05 + 0.25 * retain
+    surface = smooth * (1.0 - retain) + filled * retain
+    surface[~surface_mask] = np.nan
+    return surface.astype(np.float32), surface_mask.astype(bool), {
+        "sharp_threshold": float(sharp_threshold),
+        "confidence_threshold": float(confidence_threshold),
+        "coverage_percent": 100.0 * float(np.mean(surface_mask)),
+        "anchor_percent": 100.0 * float(np.mean(anchor_mask)),
+    }
+
+
+def _cleanup_surface_mask(signal_mask, foreground_mask):
+    import numpy as np
+
+    signal = np.asarray(signal_mask, dtype=bool)
+    foreground = np.asarray(foreground_mask, dtype=bool)
+    # Focus confidence controls which depths act as anchors, not whether the
+    # visible object exists.  Starting from the foreground prevents a smooth
+    # surface from becoming a perforated cloud in weak-texture regions.
+    candidate = foreground.copy()
+    if not np.any(candidate):
+        candidate = signal.copy()
+    try:
+        import cv2
+
+        mask_u8 = candidate.astype(np.uint8) * 255
+        close_kernel = np.ones((9, 9), dtype=np.uint8)
+        open_kernel = np.ones((3, 3), dtype=np.uint8)
+        mask_u8 = cv2.morphologyEx(mask_u8, cv2.MORPH_CLOSE, close_kernel)
+        mask_u8 = cv2.morphologyEx(mask_u8, cv2.MORPH_OPEN, open_kernel)
+        cleaned = mask_u8 > 0
+    except Exception:
+        cleaned = candidate
+    cleaned &= foreground
+    if float(np.mean(cleaned)) < 0.01:
+        cleaned = signal
+    return cleaned.astype(bool)
+
+
+def _nearest_fill_depth(depth_map, valid_mask):
+    import numpy as np
+
+    depth = np.asarray(depth_map, dtype=np.float32)
+    valid = np.asarray(valid_mask, dtype=bool) & np.isfinite(depth)
+    if not np.any(valid):
+        finite = np.isfinite(depth)
+        fill_value = float(np.median(depth[finite])) if np.any(finite) else 0.0
+        return np.full(depth.shape, fill_value, dtype=np.float32)
+    try:
+        from scipy.ndimage import distance_transform_edt
+
+        _distance, indices = distance_transform_edt(~valid, return_indices=True)
+        return depth[tuple(indices)].astype(np.float32)
+    except Exception:
+        fill_value = float(np.median(depth[valid]))
+        return np.where(valid, depth, fill_value).astype(np.float32)
+
+
+def point_cloud_from_surface(surface_depth, surface_mask, intensity_map, pixels_per_mm, z_scale=1.0):
+    import numpy as np
+
+    depth = np.asarray(surface_depth, dtype=np.float32)
+    mask = np.asarray(surface_mask, dtype=bool) & np.isfinite(depth)
+    intensity_map = np.asarray(intensity_map, dtype=np.float32)
+    h, w = depth.shape
+    ppmm = float(pixels_per_mm) if float(pixels_per_mm) > 0 else 1.0
+    ys, xs = np.where(mask)
+    if xs.size == 0:
         return np.zeros((0, 4), dtype=np.float32), 0.0
-    x_mm = (xs.astype(np.float32) - w / 2.0) / ppmm
-    y_mm = (ys.astype(np.float32) - h / 2.0) / ppmm
-    z_raw = depth_use[ys, xs].astype(np.float32)
-    if len(z_raw) >= 50:
-        z0 = float(np.percentile(z_raw, 2.0))
-        z1 = float(np.percentile(z_raw, 98.0))
-        keep = (z_raw >= z0) & (z_raw <= z1)
-        xs, ys, z_raw = xs[keep], ys[keep], z_raw[keep]
-        x_mm = x_mm[keep]
-        y_mm = y_mm[keep]
-    z_base = float(np.percentile(z_raw, 2.0)) if len(z_raw) else 0.0
-    z_mm = (z_raw - z_base).astype(np.float32) * float(z_scale)
+
+    x_mm = (xs.astype(np.float32) - (w - 1) * 0.5) / ppmm
+    y_mm = (ys.astype(np.float32) - (h - 1) * 0.5) / ppmm
+    z_raw = depth[ys, xs].astype(np.float32)
+    z_base = float(np.percentile(z_raw, 1.0))
+    z_mm = (z_raw - z_base) * float(z_scale)
     intensity = intensity_map[ys, xs].astype(np.float32)
-
-    # ── Z 离群点过滤：仅去除极端异常值（±3倍标准差外的竖柱噪点） ──
-    if len(z_mm) >= 50:
-        z_mean = float(np.mean(z_mm))
-        z_std  = float(np.std(z_mm))
-        if z_std > 0:
-            keep = np.abs(z_mm - z_mean) <= 3.0 * z_std
-            x_mm, y_mm, z_mm, intensity = x_mm[keep], y_mm[keep], z_mm[keep], intensity[keep]
-
     cloud = np.column_stack([x_mm, y_mm, z_mm, intensity]).astype(np.float32)
-    coverage = 100.0 * len(cloud) / float(w * h) if w * h else 0.0
+    coverage = 100.0 * float(len(cloud)) / float(w * h)
     return cloud, coverage
+
+
+def point_cloud_from_depth(
+    depth_map,
+    sharp_map,
+    intensity_map,
+    pixels_per_mm,
+    min_sharp,
+    z_scale,
+    confidence_map=None,
+    z_step=None,
+):
+    """Backward-compatible high-quality depth-to-point-cloud pipeline."""
+    surface_depth, surface_mask, _quality = prepare_depth_surface(
+        depth_map=depth_map,
+        sharp_map=sharp_map,
+        intensity_map=intensity_map,
+        min_sharp=min_sharp,
+        confidence_map=confidence_map,
+        z_step=z_step,
+    )
+    return point_cloud_from_surface(
+        surface_depth=surface_depth,
+        surface_mask=surface_mask,
+        intensity_map=intensity_map,
+        pixels_per_mm=pixels_per_mm,
+        z_scale=z_scale,
+    )
 
 
 def _intensity_to_rgb(intensity):
@@ -1413,11 +1816,24 @@ def save_output_bundle(
     frames_gray=None,
     z_positions=None,
     frames_color=None,
+    output_dir=None,
+    preexisting_frames_dir=None,
+    confidence_map=None,
+    surface_depth=None,
+    surface_mask=None,
+    alignment_offsets=None,
+    quality_metrics=None,
 ):
-    # 每次拍摄创建独立子文件夹，文件夹名 = 拍摄时间_类型
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    folder_name = "{}_{}".format(timestamp, prefix)
-    out_dir = os.path.join(save_dir, folder_name)
+    import numpy as np
+
+    # 采集端可预先创建目录并流式写入原始帧，避免整组大图常驻内存。
+    if output_dir:
+        out_dir = os.path.abspath(output_dir)
+        folder_name = os.path.basename(out_dir.rstrip("\\/"))
+    else:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        folder_name = "{}_{}".format(timestamp, prefix)
+        out_dir = os.path.join(save_dir, folder_name)
     ensure_dir(out_dir)
 
     full_focus_bit_depth = 8 if color_map is not None else max(12, _estimate_gray_bit_depth(intensity_map))
@@ -1440,6 +1856,18 @@ def save_output_bundle(
     paths["depth"] = os.path.join(out_dir, "depth_um16.tif")
     save_depth_tiff16(depth_map, paths["depth"], z_scale=z_scale)
 
+    if surface_depth is not None:
+        paths["surface_depth"] = os.path.join(out_dir, "surface_depth_um16.tif")
+        save_depth_tiff16(surface_depth, paths["surface_depth"], z_scale=z_scale)
+    if confidence_map is not None:
+        paths["confidence"] = os.path.join(out_dir, "focus_confidence.png")
+        confidence_u8 = np.clip(np.asarray(confidence_map, dtype=np.float32) * 255.0, 0, 255).astype(np.uint8)
+        save_composite_image(confidence_u8, paths["confidence"])
+    if surface_mask is not None:
+        paths["surface_mask"] = os.path.join(out_dir, "surface_mask.png")
+        mask_u8 = np.asarray(surface_mask, dtype=np.uint8) * 255
+        save_composite_image(mask_u8, paths["surface_mask"])
+
     if point_cloud is not None and len(point_cloud) > 0:
         paths["point_cloud_ply"] = os.path.join(out_dir, "point_cloud.ply")
         export_point_cloud(paths["point_cloud_ply"], point_cloud, pixels_per_mm, comment)
@@ -1461,6 +1889,8 @@ def save_output_bundle(
                     _np.asarray(_gray, dtype=_np.float32),
                     os.path.join(frames_dir, _fname + ".tif"))
         paths["frames_dir"] = frames_dir
+    elif preexisting_frames_dir and os.path.isdir(preexisting_frames_dir):
+        paths["frames_dir"] = preexisting_frames_dir
 
     paths["manifest"] = os.path.join(out_dir, "manifest.json")
     manifest = {
@@ -1469,6 +1899,8 @@ def save_output_bundle(
         "generator": comment,
         "parameters": _json_safe(params or {}),
         "z_positions_mm": _json_safe(z_positions if z_positions is not None else []),
+        "alignment_offsets_px": _json_safe(alignment_offsets if alignment_offsets is not None else []),
+        "quality_metrics": _json_safe(quality_metrics if quality_metrics is not None else {}),
         "units": {
             "depth_tiff_pixel_value": "relative_height_um",
             "point_cloud_coordinates": "mm",
@@ -1482,6 +1914,8 @@ def save_output_bundle(
             "full_focus TIFF is only written for grayscale fallback and is saved in a 16-bit container",
             "focus_compare PNG shows the worst single raw frame beside the DFF full-focus result when available",
             "depth TIFF is 16-bit grayscale; pixel values are relative height in micrometers",
+            "surface depth is confidence-guided, sub-step-refined and edge-preserving regularized",
+            "focus confidence records peak dominance and curvature; low-confidence geometry is repaired or masked",
             "PLY (binary) vertices include RGB values derived from the full-focus intensity texture",
         ],
     }
